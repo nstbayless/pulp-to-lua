@@ -1,0 +1,4 @@
+*.json
+*.pdx
+out.lua
+__pycache__
