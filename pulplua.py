@@ -1,20 +1,82 @@
+from enum import unique
 import json
 import sys
+import os
+import shutil
 from store import LuaOut as LuaOut
 from pulpscript import transpile_event, PulpScriptContext, istoken
+from PIL import Image
 
-if len(sys.argv) >= 1:
+if len(sys.argv) >= 2:
     file = sys.argv[1]
 else:
-    print("usage: python3 " + sys.argv[0] + " pulp.json")
+    print("usage: python3 " + sys.argv[0] + " pulp.json [out/]")
     exit(1)
+    
+outpath = "out"
+if len(sys.argv) >= 3:
+    outpath = sys.argv[2]
 
 with open(file) as f:
     pulp = json.load(f)
 
+playerid = pulp["player"]["id"]
+startroom = pulp["player"]["room"]
+
 ctx = PulpScriptContext()
 
-code = "import \"pulp\""
+def startcode():
+    code = "___pulp = {\n" \
+        + f"playerid = {playerid},\n" \
+        + f"startroom = {startroom}\n" \
+        + f"startx = {pulp['player']['x']},\n" \
+        + f"starty = {pulp['player']['y']}\n" \
+    + "}\n"
+    code += "__pulp <const> = ___pulp\n"
+    code += "import \"pulp\""
+    code += "local __sin <const> = math.sin\n"
+    code += "local __cos <const> = math.cos\n"
+    code += "local __tan <const> = math.tan\n"
+    code += "local __floor <const> = math.floor\n"
+    code += "local __ceil <const> = math.ceil\n"
+    code += "local __round <const> = function(x) return math.ceil(x + 0.5) end\n"
+    code += "local __random <const> = math.random\n"
+    return code
+    
+def endcode():
+    code = "__pulp:load()"
+    code = "__pulp:start()"
+    return code
+    
+# images (tiles)
+uniqueimagehashmap = dict()
+uniqueimagelist = []
+tileimages = []
+for frame in pulp["frames"]:
+    if frame: #some of these are false? why..?
+        h = hash(tuple(frame["data"]))
+        if h not in uniqueimagehashmap:
+            uniqueimagehashmap[h] = len(uniqueimagelist)
+            tileimages.append(len(uniqueimagelist))
+            uniqueimagelist.append(frame["data"])
+        else:
+            tileimages.append(uniqueimagehashmap[h])
+    else:
+        # TODO: what does 'false' actually mean..?
+        tileimages.append(0)
+            
+frame_img = Image.new("1", (8, 8 * len(uniqueimagelist)))
+y = 0
+print("writing image data...")
+for data in uniqueimagelist:
+    i = 0
+    for p in data:
+        assert p == 0 or p == 1
+        frame_img.putpixel((i % 8, y + i // 8), 1 - (p%2))
+        i += 1
+    y += 8
+print("done.")
+# scripts
 
 def getScriptName(type, id):
     if type == 0 and id == 0:
@@ -27,6 +89,8 @@ def getScriptName(type, id):
     ctx.errors += [f"unknown script, type {type}, id {id}"]
     return f"__UNKNOWN_SCRIPT_{type}_{id}"
 
+scripttypes = ["global", "room", "tile"]
+
 class Script:
     def __init__(self, id, type) -> None:
         self.id = id
@@ -34,15 +98,52 @@ class Script:
         self.code = ""
         self.name = getScriptName(type, id)
         
+        self.code += f"\n----------------- {self.name} ----------------------------\n"
         self.code += f"__pulp:newScript(\"{self.name}\")"
         
         if istoken(self.name):
-            self.code += self.name + f" = __pulp:getScript(\"{self.name}\")"
+            self.code += "\n" + self.name + f" = __pulp:getScript(\"{self.name}\")"
         
+        self.code += f"__pulp.associateScript({self.name}, {scripttypes[self.type]}, {self.id})"
+        
+        self.code += "\n"
     
     def addEvent(self, key, blocks, blockidx):
         ctx.blocks = blocks
-        self.code += "\n\n" + transpile_event(self.name, key, ctx, blockidx)
+        self.code += "\n" + transpile_event(self.name, key, ctx, blockidx)
+
+code = startcode()
+
+# images
+tile_id = 0
+
+code += "\n__pulp.tiles = {\n"
+for tile in pulp["tiles"]:
+    code += "  {\n"
+    code += f"    id = {tile['id']},\n"
+    code += f"    fps = {tile['fps']},\n"
+    code += f"    name = \"{tile['name']}\",\n"
+    code += f"    type = {tile['type']},\n"
+    code += f"    btype = {tile['btype']},\n"
+    code += f"    solid = {tile['solid']},\n".lower()
+    code += "    frames = {\n"
+    for frame in tile["frames"]:
+        code += f"      {tileimages[frame]},\n"
+    code += "    nil}\n"
+    code += "  },\n"
+code += "nil}\n"
+
+# rooms
+code += "\n__pulp.rooms = {\n"
+for room in pulp["rooms"]:
+    code += "  {\n"
+    code += f"    id = {room['id']},\n"
+    code += f"    name = \"{room['name']}\",\n"
+    code += f"    song = {room['song']},\n"
+    code += f"    tiles = {room['tiles']},\n"
+    # TODO: exits
+    code += "  },"
+code += "nil}\n"
 
 for pulpscript in pulp["scripts"]:
     script = Script(pulpscript["id"], pulpscript["type"])
@@ -54,8 +155,16 @@ for pulpscript in pulp["scripts"]:
     code += script.code
     LuaOut.scripts.append(script)
 
-print(code)
+code += endcode()
 
 for error in list(set(ctx.errors)):
     print("--" + str(error))
-print("--" + str(pulp.keys()))
+
+# output
+if not os.path.isdir(outpath):
+    os.mkdir(outpath)
+with open(os.path.join(outpath, "main.lua"), "w") as f:
+    f.write(code)
+shutil.copy("pulp.lua", outpath)
+frame_img.save(os.path.join(outpath, "tiles.png"))
+print(f"files written to {outpath}")

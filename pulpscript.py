@@ -1,12 +1,12 @@
 from cmath import exp
 from re import S
 
+RELASSIGN = False
 
 class PulpScriptContext:
     def __init__(self):
         self.indent = 1
         self.errors = []
-        self.evname = None
         
     def gi(self):
         return "  "*self.indent
@@ -25,36 +25,59 @@ funclist = [
     "shake",
     "fin",
     "hide",
-    "bpm",
     "draw",
+    "bpm",
     "sound",
-    "round",
     "invert",
     "frame",
-    "restore",
-    "floor",
     "fill",
     "swap",
     "frame",
     "label",
+    "restore",
     "store",
+    "toss",
     "wait",
     "say",
+    "ask",
+    "act",
     "loop",
     "once",
-    "tell"
+    "stop",
+    "tell",
+    "ignore",
+    "listen",
+    "log",
+    "dump",
 ]
 
 exfuncs = [
     "frame",
     "name",
-    "round",
     "floor",
+    "round",
+    "ceil",
     "invert",
     "random",
+    "sine",
+    "cosine",
+    "tangent",
+    "degrees",
+    "radians",
     "lpad", # args: (string, width, padsymbol)
     "rpad", # args: (string, width, padsymbol)
 ]
+
+staticfuncs = {
+    "floor": "__floor",
+    "ceil": "__ceil",
+    "round": "__round",
+    "sine": "__sin",
+    "cosine": "__cos",
+    "sine": "__sin",
+    "tangent": "__tan",
+    "random": "__random"
+}
 
 def istoken(s):
     if type(s) != str:
@@ -94,7 +117,7 @@ def ex_embed(expression, ctx):
     return f"__pulp:__ex_embed({decode_rvalue(expression[1], ctx)})"
 
 def ex_subroutine(expression, ctx):
-    s = "function()"
+    s = "function(self, actor, event)"
     ctx.indent += 2
     s += transpile_commands(ctx.blocks[expression[1]], ctx)
     ctx.indent -= 2
@@ -102,7 +125,7 @@ def ex_subroutine(expression, ctx):
 
 def decode_rvalue(expression, ctx):
     if type(expression) == str:
-        return str(expression)
+        return '"' + str(expression) + '"'
     elif type(expression) == int or type(expression) == float:
         return str(expression)
     else:
@@ -125,15 +148,20 @@ def op_set(cmd, operator, ctx):
     lvalue = cmd[1]
     assert (type(lvalue) == str)
     rvalue = decode_rvalue(cmd[2], ctx)
-    return f"{lvalue} {operator} {rvalue}"
-    pass
+    if operator == "" or RELASSIGN:
+        return f"{lvalue} {operator}= {rvalue}"
+    else:
+        return f"{lvalue} = {lvalue} {operator} {rvalue}"
 
 def op_block(cmd, statement, follow, ctx):
     condition = cmd[1]
     comparison = condition[0]
     assert comparison in compdict, f"unrecognized comparison operator '{comparison}'"
     compsym = compdict[comparison]
-    compl = decode_rvalue(condition[1], ctx)
+    if istoken(condition[1]):
+        compl = condition[1]
+    else:
+        compl = decode_rvalue(condition[1], ctx)
     compr = decode_rvalue(condition[2], ctx)
     block = cmd[2]
     assert(block[0] == "block")
@@ -151,19 +179,18 @@ def op_call(cmd, ctx):
         return f"self[{decode_rvalue(cmd[1], ctx)}]()"
         
 def op_emit(cmd, ctx):
-    return f"__pulp:emit({decode_rvalue(cmd[1], ctx)})"
+    return f"__pulp:emit({decode_rvalue(cmd[1], ctx)}, __actor, event)"
     
 def op_mimic(cmd, ctx):
     s = f"__pulp:getScript({decode_rvalue(cmd[1], ctx)})"
-    if istoken(ctx.evname):
-        s += f".{ctx.evname}"
-    else:
-        s += f"[{decode_rvalue(cmd[1])}]"
-    return s + "(self, event) -- (Mimic)"
+    s += "[event.__name]"
+    return s + "(self, __actor, event) -- (Mimic)"
     
 def opex_func(cmd, op, ctx):
     mainargs = []
-    setargs = {}
+    setargs = {
+        "actor": "__actor"
+    }
     for arg in cmd[1:]:
         if type(arg) == list:
             if arg[0] == "xy":
@@ -179,18 +206,23 @@ def opex_func(cmd, op, ctx):
                 setargs["block"] = decode_rvalue(arg, ctx)
             else:
                 mainargs.append(decode_rvalue(arg, ctx))
-    _pre_mainarg = "{"
-    first = True
-    for sarg in setargs:
-        if first:
-            first = False
-        else:
-            _pre_mainarg += ", "
-        _pre_mainarg += sarg + " = " + setargs[sarg]
-    _pre_mainarg += "}"
-    mainargs = [_pre_mainarg] + mainargs
     
-    s = f"__pulp:{op}("
+    sfunc = op in staticfuncs            
+    if not sfunc:
+        _pre_mainarg = "{"
+        first = True
+        for sarg in setargs:
+            if first:
+                first = False
+            else:
+                _pre_mainarg += ", "
+            _pre_mainarg += sarg + " = " + setargs[sarg]
+        _pre_mainarg += "}"
+        mainargs = [_pre_mainarg] + mainargs
+    
+        s = f"__pulp:{op}("
+    else:
+        s = staticfuncs[op] + "("
     first = True
     for arg in mainargs:
         if first:
@@ -206,15 +238,15 @@ def transpile_command(cmd, ctx):
     if op == "_":
         return ctx.gi() + "\n"
     elif op == "set":
-        return ctx.gi() + op_set(cmd, "=", ctx) + "\n"
+        return ctx.gi() + op_set(cmd, "", ctx) + "\n"
     elif op == "add":
-        return ctx.gi() + op_set(cmd, "+=", ctx) + "\n"
+        return ctx.gi() + op_set(cmd, "+", ctx) + "\n"
     elif op == "sub":
-        return ctx.gi() + op_set(cmd, "-=", ctx) + "\n"
+        return ctx.gi() + op_set(cmd, "-", ctx) + "\n"
     elif op == "div":
-        return ctx.gi() + op_set(cmd, "/=", ctx) + "\n"
+        return ctx.gi() + op_set(cmd, "/", ctx) + "\n"
     elif op == "mul":
-        return ctx.gi() + op_set(cmd, "*=", ctx) + "\n"
+        return ctx.gi() + op_set(cmd, "*", ctx) + "\n"
     elif op == "if":
         return ctx.gi() + op_block(cmd, "if", "then", ctx) + "\n"
     elif op == "while":
@@ -243,16 +275,14 @@ def transpile_commands(commands, ctx):
     return s
         
 def transpile_event(evobj, evname, ctx, blockidx):
-    ctx.evname = evname
     _evobj = evobj
     if not istoken(evobj):
         _evobj = f"__pulp:getScript(\"{evobj}\")"
     if istoken(evname) and istoken(evobj):
-        s = f"function {_evobj}:{evname}(event)"
+        s = f"function {_evobj}:{evname}(__actor, event)"
     else:
-        s = f"{_evobj}[\"{evname}\"] = function(self, event)"
+        s = f"{_evobj}[\"{evname}\"] = function(self, __actor, event)"
         
     s += transpile_commands(ctx.blocks[blockidx], ctx)
-    s += "end"
-    ctx.evname = None
+    s += "end\n"
     return s
