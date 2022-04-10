@@ -27,12 +27,14 @@ ctx = PulpScriptContext()
 
 def startcode():
     code = "___pulp = {\n" \
-        + f"playerid = {playerid},\n" \
-        + f"startroom = {startroom}\n" \
-        + f"startx = {pulp['player']['x']},\n" \
-        + f"starty = {pulp['player']['y']}\n" \
+        + f"  playerid = {playerid},\n" \
+        + f"  startroom = {startroom},\n" \
+        + f"  startx = {pulp['player']['x']},\n" \
+        + f"  starty = {pulp['player']['y']},\n" \
+        + f"  gamename = \"{pulp['name']}\"\n," \
+        + f"  tile_img = playdate.graphics.imagetable.new(\"tiles\")\n" \
     + "}\n"
-    code += "__pulp <const> = ___pulp\n"
+    code += "local __pulp <const> = ___pulp\n"
     code += "import \"pulp\""
     code += "local __sin <const> = math.sin\n"
     code += "local __cos <const> = math.cos\n"
@@ -44,8 +46,8 @@ def startcode():
     return code
     
 def endcode():
-    code = "__pulp:load()"
-    code = "__pulp:start()"
+    code = "\n__pulp:load()\n"
+    code += "__pulp:start()\n"
     return code
     
 # images (tiles)
@@ -104,7 +106,7 @@ class Script:
         if istoken(self.name):
             self.code += "\n" + self.name + f" = __pulp:getScript(\"{self.name}\")"
         
-        self.code += f"__pulp.associateScript({self.name}, {scripttypes[self.type]}, {self.id})"
+        self.code += f"__pulp:associateScript(\"{self.name}\", \"{scripttypes[self.type]}\", {self.id})"
         
         self.code += "\n"
     
@@ -117,9 +119,9 @@ code = startcode()
 # images
 tile_id = 0
 
-code += "\n__pulp.tiles = {\n"
+code += "\n__pulp.tiles = {}\n"
 for tile in pulp["tiles"]:
-    code += "  {\n"
+    code += f"__pulp.tiles[{tile['id']}] = " + "{\n"
     code += f"    id = {tile['id']},\n"
     code += f"    fps = {tile['fps']},\n"
     code += f"    name = \"{tile['name']}\",\n"
@@ -128,22 +130,23 @@ for tile in pulp["tiles"]:
     code += f"    solid = {tile['solid']},\n".lower()
     code += "    frames = {\n"
     for frame in tile["frames"]:
-        code += f"      {tileimages[frame]},\n"
+        code += f"      {tileimages[frame]+1},\n"
     code += "    nil}\n"
-    code += "  },\n"
-code += "nil}\n"
+    code += "  }\n"
 
 # rooms
-code += "\n__pulp.rooms = {\n"
+code += "\n__pulp.rooms = {}"
 for room in pulp["rooms"]:
-    code += "  {\n"
-    code += f"    id = {room['id']},\n"
-    code += f"    name = \"{room['name']}\",\n"
-    code += f"    song = {room['song']},\n"
-    code += f"    tiles = {room['tiles']},\n"
+    code += f"__pulp.rooms[{room['id']}] = " + "{\n"
+    code += f"  id = {room['id']},\n"
+    code += f"  name = \"{room['name']}\",\n"
+    code += f"  song = {room['song']},\n"
+    code += "  tiles = {\n"
+    for tile in room["tiles"]:
+        code += f"    {tile},\n"
+    code += "  nil}\n"
     # TODO: exits
-    code += "  },"
-code += "nil}\n"
+    code += "}\n"
 
 for pulpscript in pulp["scripts"]:
     script = Script(pulpscript["id"], pulpscript["type"])
@@ -155,6 +158,13 @@ for pulpscript in pulp["scripts"]:
     code += script.code
     LuaOut.scripts.append(script)
 
+code += "\n"
+vars = list(ctx.vars)
+vars.sort()
+for var in vars:
+    if istoken(var) and "." not in var:
+        code += f"{var} = 0\n"
+code += "\n"
 code += endcode()
 
 for error in list(set(ctx.errors)):
@@ -166,5 +176,5 @@ if not os.path.isdir(outpath):
 with open(os.path.join(outpath, "main.lua"), "w") as f:
     f.write(code)
 shutil.copy("pulp.lua", outpath)
-frame_img.save(os.path.join(outpath, "tiles.png"))
+frame_img.save(os.path.join(outpath, "tiles-table-8-8.png"))
 print(f"files written to {outpath}")

@@ -1,21 +1,22 @@
 from cmath import exp
 from re import S
 
-RELASSIGN = False
+RELASSIGN = True
 
 class PulpScriptContext:
     def __init__(self):
         self.indent = 1
         self.errors = []
+        self.vars = set()
         
     def gi(self):
         return "  "*self.indent
         
 compdict = {
     "lt": "<",
-    "lte": ">=",
+    "lte": "<=",
     "gt": ">",
-    "gte": "<=",
+    "gte": ">=",
     "eq": "==",
     "neq": "~=",
 }
@@ -64,9 +65,23 @@ exfuncs = [
     "tangent",
     "degrees",
     "radians",
-    "lpad", # args: (string, width, padsymbol)
-    "rpad", # args: (string, width, padsymbol)
+    "lpad", # args: (string, width, [padsymbol])
+    "rpad", # args: (string, width, [padsymbol])
 ]
+
+inlinefuncs = {
+    "__fn_frame": "{0}.frame = {1}",
+    "__ex_frame": "({0}.frame or 0)",
+}
+
+funcargs = {
+    "frame": ["actor"],
+    "tell": ["x", "y", "block"],
+    "goto": ["actor", "x", "y"],
+    "tell": ["x", "y", "event", "block"],
+    "swap": ["actor"],
+    "name": ["actor"]
+}
 
 staticfuncs = {
     "floor": "__floor",
@@ -89,6 +104,7 @@ def istoken(s):
     return True
 
 def ex_get(expression, ctx):
+    ctx.vars.add(expression[1])
     return expression[1]
     
 def ex_format(expression, ctx):
@@ -101,23 +117,26 @@ def ex_format(expression, ctx):
             if "\n" in s:
                 subnewline = True
         else:
-            s += '%s'
             args.append(component)
-            
+    
+    ctx.format_embeds = []
     if subnewline:
         s = 'string.format([[' + s + ']]'
     else:
         s = 'string.format("' + s + '"'
     for arg in args:
-        s += f", tostring({decode_rvalue(arg, ctx)})"
+        if type(arg) == list and arg[0] == "embed":
+            pass
+        else:
+            s += f", tostring({decode_rvalue(arg, ctx)})"
     s += ")"
     return s
 
 def ex_embed(expression, ctx):
-    return f"__pulp:__ex_embed({decode_rvalue(expression[1], ctx)})"
+    return f"__pulp.__ex_embed({decode_rvalue(expression[1], ctx)})"
 
 def ex_subroutine(expression, ctx):
-    s = "function(self, actor, event)"
+    s = "function(self, __actor, event)\n"
     ctx.indent += 2
     s += transpile_commands(ctx.blocks[expression[1]], ctx)
     ctx.indent -= 2
@@ -125,7 +144,7 @@ def ex_subroutine(expression, ctx):
 
 def decode_rvalue(expression, ctx):
     if type(expression) == str:
-        return '"' + str(expression) + '"'
+        return '"' + str(expression).replace("\n", "\\n") + '"'
     elif type(expression) == int or type(expression) == float:
         return str(expression)
     else:
@@ -137,7 +156,7 @@ def decode_rvalue(expression, ctx):
         elif ex == "embed":
             return ex_embed(expression, ctx)
         elif ex in exfuncs:
-            return opex_func(expression, "__ex_" + ex, ctx)
+            return opex_func(expression, ex, "__ex_", ctx)
         elif ex == "block":
             return ex_subroutine(expression, ctx)
         else:
@@ -147,13 +166,14 @@ def decode_rvalue(expression, ctx):
 def op_set(cmd, operator, ctx):
     lvalue = cmd[1]
     assert (type(lvalue) == str)
+    ctx.vars.add(lvalue)
     rvalue = decode_rvalue(cmd[2], ctx)
     if operator == "" or RELASSIGN:
         return f"{lvalue} {operator}= {rvalue}"
     else:
         return f"{lvalue} = {lvalue} {operator} {rvalue}"
 
-def op_block(cmd, statement, follow, ctx):
+def op_block(cmd, statement, follow, end, ctx):
     condition = cmd[1]
     comparison = condition[0]
     assert comparison in compdict, f"unrecognized comparison operator '{comparison}'"
@@ -165,32 +185,55 @@ def op_block(cmd, statement, follow, ctx):
     compr = decode_rvalue(condition[2], ctx)
     block = cmd[2]
     assert(block[0] == "block")
-    s = f"{statement} {compl} {compsym} {compr} {follow}"
+    s = f"{statement} {compl} {compsym} {compr} {follow}\n"
     ctx.indent += 1
     s += transpile_commands(ctx.blocks[block[1]], ctx)
     ctx.indent -= 1
-    s += ctx.gi() + "end"
+    
+    for sub in cmd[3:]:
+        if sub[0] == "elseif":
+            s += op_block(sub, "elseif", "then", None, ctx)
+        elif sub[0] == "else":
+            s += ctx.gi() + "else\n"
+            ctx.indent += 1
+            block = sub[1]
+            assert(block[0] == "block")
+            s += transpile_commands(ctx.blocks[block[1]], ctx)
+            ctx.indent -= 1
+            pass
+        else:
+            assert False, f"unrecognized block followup '{sub[0]}'"
+    if end:
+        s += ctx.gi() + end
     return s
     
 def op_call(cmd, ctx):
     if istoken(cmd[1]):
-        return f"self:{cmd[1]}()"
+        callfn = f"self.{cmd[1]}"
     else:
-        return f"self[{decode_rvalue(cmd[1], ctx)}]()"
+        callfn = f"self[{decode_rvalue(cmd[1], ctx)}]"
+    return f"if {callfn} or self.any then ({callfn} or self.any)(self, __actor, event) end"
         
 def op_emit(cmd, ctx):
     return f"__pulp:emit({decode_rvalue(cmd[1], ctx)}, __actor, event)"
     
 def op_mimic(cmd, ctx):
-    s = f"__pulp:getScript({decode_rvalue(cmd[1], ctx)})"
-    s += "[event.__name]"
+    s = f"__pulp:getScriptEventByName({decode_rvalue(cmd[1], ctx)}, event.__name)"
     return s + "(self, __actor, event) -- (Mimic)"
     
-def opex_func(cmd, op, ctx):
+def op_tell(cmd, ctx):
+    if type(cmd[1]) == list and cmd[1][1] == "xy":
+        pass
+    else:
+        return opex_func(cmd, "tell", "__fn_", ctx)
+    
+def opex_func(cmd, op, prefix, ctx):
     mainargs = []
     setargs = {
-        "actor": "__actor"
+        "actor": "__actor",
+        "event": "event"
     }
+        
     for arg in cmd[1:]:
         if type(arg) == list:
             if arg[0] == "xy":
@@ -206,23 +249,25 @@ def opex_func(cmd, op, ctx):
                 setargs["block"] = decode_rvalue(arg, ctx)
             else:
                 mainargs.append(decode_rvalue(arg, ctx))
+        else:
+            mainargs.append(decode_rvalue(arg, ctx))
     
-    sfunc = op in staticfuncs            
-    if not sfunc:
-        _pre_mainarg = "{"
-        first = True
-        for sarg in setargs:
-            if first:
-                first = False
+    if op in funcargs:
+        for argname in funcargs[op][::-1]:
+            if argname in setargs:
+                mainargs = [setargs[argname]] + mainargs
             else:
-                _pre_mainarg += ", "
-            _pre_mainarg += sarg + " = " + setargs[sarg]
-        _pre_mainarg += "}"
-        mainargs = [_pre_mainarg] + mainargs
+                mainargs = ["nil"] + mainargs
     
-        s = f"__pulp:{op}("
-    else:
+    if prefix + op in inlinefuncs:
+        s = inlinefuncs[prefix + op]
+        for i in range(len(mainargs)):
+            s = s.replace("{" + str(i) + "}", mainargs[i])
+        return s
+    elif op in staticfuncs:
         s = staticfuncs[op] + "("
+    else:
+        s = f"__pulp.{prefix}{op}("
     first = True
     for arg in mainargs:
         if first:
@@ -236,7 +281,7 @@ def transpile_command(cmd, ctx):
     op = cmd[0]
     
     if op == "_":
-        return ctx.gi() + "\n"
+        return "" # ctx.gi() + "\n"
     elif op == "set":
         return ctx.gi() + op_set(cmd, "", ctx) + "\n"
     elif op == "add":
@@ -248,17 +293,19 @@ def transpile_command(cmd, ctx):
     elif op == "mul":
         return ctx.gi() + op_set(cmd, "*", ctx) + "\n"
     elif op == "if":
-        return ctx.gi() + op_block(cmd, "if", "then", ctx) + "\n"
+        return ctx.gi() + op_block(cmd, "if", "then", "end", ctx) + "\n"
     elif op == "while":
-        return ctx.gi() + op_block(cmd, "while", "do", ctx) + "\n"
+        return ctx.gi() + op_block(cmd, "while", "do", "end", ctx) + "\n"
     elif op == "call":
         return ctx.gi() + op_call(cmd, ctx) + "\n"
     elif op == "emit":
         return ctx.gi() + op_emit(cmd, ctx) + "\n"
     elif op == "mimic":
         return ctx.gi() + op_mimic(cmd, ctx) + "\n"
+    elif op == "tell":
+        return ctx.gi() + op_tell(cmd, ctx) + "\n"
     elif op in funclist:
-        return ctx.gi() + opex_func(cmd, "__fn_" + op, ctx) + "\n"
+        return ctx.gi() + opex_func(cmd, op, "__fn_", ctx) + "\n"
     elif op == "#":
         return f"{ctx.gi()}--(comment omitted)\n"
     elif op == "#$":
@@ -279,9 +326,9 @@ def transpile_event(evobj, evname, ctx, blockidx):
     if not istoken(evobj):
         _evobj = f"__pulp:getScript(\"{evobj}\")"
     if istoken(evname) and istoken(evobj):
-        s = f"function {_evobj}:{evname}(__actor, event)"
+        s = f"function {_evobj}:{evname}(__actor, event)\n"
     else:
-        s = f"{_evobj}[\"{evname}\"] = function(self, __actor, event)"
+        s = f"{_evobj}[\"{evname}\"] = function(self, __actor, event)\n"
         
     s += transpile_commands(ctx.blocks[blockidx], ctx)
     s += "end\n"
