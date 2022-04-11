@@ -3,8 +3,9 @@ import json
 import sys
 import os
 import shutil
+from tkinter import font
 from store import LuaOut as LuaOut
-from pulpscript import transpile_event, PulpScriptContext, istoken
+from pulpscript import transpile_event, PulpScriptContext, istoken, tile_ids
 from PIL import Image
 
 if len(sys.argv) >= 2:
@@ -22,6 +23,7 @@ with open(file) as f:
 
 playerid = pulp["player"]["id"]
 startroom = pulp["player"]["room"]
+halfwidth = pulp["font"]["type"] != 1
 
 ctx = PulpScriptContext()
 
@@ -31,7 +33,10 @@ def startcode():
         + f"  startroom = {startroom},\n" \
         + f"  startx = {pulp['player']['x']},\n" \
         + f"  starty = {pulp['player']['y']},\n" \
-        + f"  gamename = \"{pulp['name']}\"\n," \
+        + f"  gamename = \"{pulp['name']}\",\n" \
+        + f"  halfwidth = {str(halfwidth).lower()},\n" \
+        + f"  pipe_img = playdate.graphics.imagetable.new(\"pipe\"),\n" \
+        + f"  font_img = playdate.graphics.imagetable.new(\"font\"),\n" \
         + f"  tile_img = playdate.graphics.imagetable.new(\"tiles\")\n" \
     + "}\n"
     code += "local __pulp <const> = ___pulp\n"
@@ -43,12 +48,35 @@ def startcode():
     code += "local __ceil <const> = math.ceil\n"
     code += "local __round <const> = function(x) return math.ceil(x + 0.5) end\n"
     code += "local __random <const> = math.random\n"
+    code += "local __tau <const> = math.pi * 2\n"
+    code += "local __tostring <const> = tostring\n"
     return code
     
 def endcode():
     code = "\n__pulp:load()\n"
     code += "__pulp:start()\n"
     return code
+    
+def write_data_to_image(img, y, data):
+    i = 0
+    for p in data:
+        assert p == 0 or p == 1
+        img.putpixel((i % img.width, y + i // img.width), 1 - (p%2))
+        i += 1
+    
+# images (font, borders)
+borderimage = Image.new("1", (8, 8 * len(pulp["font"]["pipe"])))
+fontimage = Image.new("1", (4 if halfwidth else 8, 8 * len(pulp["font"]["chars"])))
+
+y = 0
+for data in pulp["font"]["pipe"]:
+    write_data_to_image(borderimage, y, data)
+    y += 8
+
+y = 0
+for data in pulp["font"]["chars"]:
+    write_data_to_image(fontimage, y, data)
+    y += 8
     
 # images (tiles)
 uniqueimagehashmap = dict()
@@ -71,11 +99,7 @@ frame_img = Image.new("1", (8, 8 * len(uniqueimagelist)))
 y = 0
 print("writing image data...")
 for data in uniqueimagelist:
-    i = 0
-    for p in data:
-        assert p == 0 or p == 1
-        frame_img.putpixel((i % 8, y + i // 8), 1 - (p%2))
-        i += 1
+    write_data_to_image(frame_img, y, data)
     y += 8
 print("done.")
 # scripts
@@ -121,6 +145,7 @@ tile_id = 0
 
 code += "\n__pulp.tiles = {}\n"
 for tile in pulp["tiles"]:
+    tile_ids[tile['name']] = tile['id']
     code += f"__pulp.tiles[{tile['id']}] = " + "{\n"
     code += f"    id = {tile['id']},\n"
     code += f"    fps = {tile['fps']},\n"
@@ -158,13 +183,42 @@ for pulpscript in pulp["scripts"]:
     code += script.code
     LuaOut.scripts.append(script)
 
+if len(ctx.full_mimics) > 0:
+    code += "\n-- full mimics\n"
+    code += "for _=1,5 do\n"
+    for full_mimic in ctx.full_mimics:
+        evobj = full_mimic[0]
+        evname = full_mimic[1]
+        evtarg = full_mimic[2]
+        if evname != "any":
+            code += f"__pulp:getScript(\"{evobj}\")[\"{evname}\"]" \
+                + f" = __pulp:getScript(\"{evtarg}\")[\"{evname}\"] or " \
+                + f"__pulp:getScript(\"{evtarg}\").any\n"
+        else:
+            code += f"""
+for name, fn in pairs(__pulp:getScript(\"{evtarg}\")) do
+    if not __pulp:getScript(\"{evobj}\")[name] and type(fn) == "function" then
+        __pulp:getScript(\"{evobj}\")[name] = fn
+    end
+end
+"""
+    code += "end\n"
+
 code += "\n"
 vars = list(ctx.vars)
-vars.sort()
+vars.sort(key=lambda var: -ctx.var_usage[var])
+varcode = ""
+LOCVARMAX = 160 # chosen rather arbitrarily. 200 is too high though; it won't compile.
+i = 0
 for var in vars:
+    assert not var.startswith("__"), "variables cannot start with __."
     if istoken(var) and "." not in var:
-        code += f"{var} = 0\n"
-code += "\n"
+        if i < LOCVARMAX:
+            # TODO: optimize local variables by usage
+            varcode += "local "
+            i += 1
+        varcode += f"{var} = 0\n"
+code = varcode + "\n" + code
 code += endcode()
 
 for error in list(set(ctx.errors)):
@@ -177,4 +231,6 @@ with open(os.path.join(outpath, "main.lua"), "w") as f:
     f.write(code)
 shutil.copy("pulp.lua", outpath)
 frame_img.save(os.path.join(outpath, "tiles-table-8-8.png"))
+borderimage.save(os.path.join(outpath, "pipe-table-8-8.png"))
+fontimage.save(os.path.join(outpath, "font-table-8-8.png"))
 print(f"files written to {outpath}")

@@ -5,6 +5,10 @@ import "CoreLibs/utilities/sampler"
 local pulp <const> = ___pulp
 local floor <const> = math.floor
 local max <const> = math.max
+local min <const> = math.min
+local substr <const> = string.sub
+local string_char <const> = string.char
+local string_byte <const> = string.byte
 pulp.scripts = {}
 pulp.tiles = pulp.tiles or {}
 pulp.tiles_by_name = {}
@@ -32,15 +36,22 @@ pulp.roomQueued = nil
 pulp.frame = 0
 pulp.tilemap = playdate.graphics.tilemap.new()
 pulp.game_is_loaded = false
+pulp.timers = {}
+local pulp_tile_fps_lookup_floor = {}
+local pulp_tile_fps_lookup_floor_lookup = {}
 
 local EMPTY <const> = {
     any = function (...) end
 }
+pulp.EMPTY = {
+    any = function (...) end
+}
+pulp.EMPTY.script = pulp.EMPTY
 
 local ACTOR_TYPE_GLOBAL = 0
 local ACTOR_TYPE_ROOM = 1
 local ACTOR_TYPE_TILE = 2
-local FPS = 40
+local FPS = 20
 
 local alphabet =
       " !\"#$%&'()*+,-./0123"
@@ -113,6 +124,9 @@ function event_persist:new(name)
         ax = self.ax,
         ay = self.ay,
         az = self.az,
+        dx = self.dx,
+        dy = self.dy,
+        game = pulp.game,
         room = self.room,
         orientation = self.orientation,
         __name = name
@@ -248,7 +262,7 @@ local right_press_time = false
 
 local function readInput()
     local a = playdate.buttonIsPressed( playdate.kButtonA )
-    local b = playdate.buttonIsPressed( playdate.kButtonA )
+    local b = playdate.buttonIsPressed( playdate.kButtonB )
     local up = playdate.buttonIsPressed( playdate.kButtonUp )
     local down = playdate.buttonIsPressed( playdate.kButtonDown )
     local left = playdate.buttonIsPressed( playdate.kButtonLeft )
@@ -333,9 +347,9 @@ local function readInput()
         event_persist.dx = 0
         event_persist.dy = 0
         if up_pressed then
-            event_persist.dy = 1
-        elseif down_pressed then
             event_persist.dy = -1
+        elseif down_pressed then
+            event_persist.dy = 1
         elseif left_pressed then
             event_persist.dx = -1
         elseif right_pressed then
@@ -357,7 +371,7 @@ local function readInput()
         end
         if (up_pressed or down_pressed or left_pressed or right_pressed) then
             local event = event_persist:new("update");
-            (playerScript.confirm or playerScript.any)(playerScript, pulp.player, event)
+            (playerScript.update or playerScript.any)(playerScript, pulp.player, event)
         end
     end
     
@@ -369,14 +383,6 @@ local function readInput()
     prev_right = right
 end
 
-local tileUpdateFrame <const> = function(tilei)
-    if tilei.fps > 0 then
-        tilei.frame = pulp.tile_fps_lookup_floor[tilei.fps_lookup_idx]
-    else
-        tilei.frame = floor(tilei.frame)
-    end
-end
-
 function playdate.update()
     if not pulp.game_is_loaded then
         return
@@ -386,7 +392,6 @@ function playdate.update()
     
     if pulp.roomQueued then
         pulp:exitRoom()
-        
         pulp:enterRoom(pulp.roomQueued)
     end
     
@@ -403,7 +408,7 @@ function playdate.update()
             if framecs[i] >= i then
                 framecs[i] -= i
             end
-            pulp.tile_fps_lookup_floor[pulp.tile_fps_lookup_floor_lookup[fps][i]] = floor(framecs[i])
+            pulp_tile_fps_lookup_floor[pulp_tile_fps_lookup_floor_lookup[fps][i]] = floor(framecs[i])
         end
     end
     
@@ -411,7 +416,12 @@ function playdate.update()
     for x = 0,TILESW-1 do
         for y = 0,TILESH-1 do
             local tilei = pulp.roomtiles[y][x]
-            tileUpdateFrame(tilei)
+            
+            if tilei.fps > 0 then
+                tilei.frame = pulp_tile_fps_lookup_floor[tilei.fps_lookup_idx]
+            else
+                tilei.frame = floor(tilei.frame)
+            end
             
             -- checks if changed
             local frame = tilei.tile.frames[tilei.frame + 1]
@@ -422,12 +432,32 @@ function playdate.update()
         end
     end
     
+    -- timers
+    local timers_activate = {}
+    for i, timer in pairs(pulp.timers) do
+        timer.duration -= 1/FPS
+        if timer.duration <= 0 then
+            pulp.timers[i] = nil
+            timers_activate[#timers_activate+1] = timer
+        end
+    end
+    
+    for i=1,#timers_activate do
+        local timer = timers_activate[i]
+        timer.block(timer.self, timer.actor, timer.event)
+    end
+    
     -- draw all non-player tiles
     pulp.tilemap:draw(0, 0)
     
     -- update player frame
     local player = pulp.player
-    tileUpdateFrame(player)
+    
+    if player.fps > 0 then
+        player.frame = pulp_tile_fps_lookup_floor[player.fps_lookup_idx]
+    else
+        player.frame = floor(player.frame)
+    end
     
     local playerScript = pulp:getPlayerScript()
     
@@ -453,18 +483,16 @@ function pulp:load()
     pulp.player.script = pulp:getScript(pulp.playerid) or {}
     assert(pulp.player.script)
     pulp.tile_fps_lookup = {}
-    pulp.tile_fps_lookup_floor = {}
-    pulp.tile_fps_lookup_floor_lookup = {}
     for i, tile in pairs(pulp.tiles) do
         pulp.tiles_by_name[tile.name] = tile
         if tile.fps > 0 then
-            pulp.tile_fps_lookup_floor_lookup[tile.fps] = pulp.tile_fps_lookup_floor_lookup[tile.fps] or {}
-            if not pulp.tile_fps_lookup_floor_lookup[tile.fps][#tile.frames] then
-                local idx = #pulp.tile_fps_lookup_floor + 1
-                pulp.tile_fps_lookup_floor[idx] = 0
-                pulp.tile_fps_lookup_floor_lookup[tile.fps][#tile.frames] = idx
+            pulp_tile_fps_lookup_floor_lookup[tile.fps] = pulp_tile_fps_lookup_floor_lookup[tile.fps] or {}
+            if not pulp_tile_fps_lookup_floor_lookup[tile.fps][#tile.frames] then
+                local idx = #pulp_tile_fps_lookup_floor + 1
+                pulp_tile_fps_lookup_floor[idx] = 0
+                pulp_tile_fps_lookup_floor_lookup[tile.fps][#tile.frames] = idx
             end
-            tile.fps_lookup_idx = pulp.tile_fps_lookup_floor_lookup[tile.fps][#tile.frames]
+            tile.fps_lookup_idx = pulp_tile_fps_lookup_floor_lookup[tile.fps][#tile.frames]
             pulp.tile_fps_lookup[tile.fps] = pulp.tile_fps_lookup[tile.fps] or {}
             pulp.tile_fps_lookup[tile.fps][#tile.frames] = 0
         end
@@ -478,10 +506,17 @@ function pulp:load()
     end
     local event = event_persist:new("load")
     for _, script in pairs(pulp.scripts) do
+        -- ensure 'any' exists
         script.any = script.any or function(...) end
+    end
+    for _, script in pairs(pulp.scripts) do
         ;(script.load or script.any)(script, nil, event)
     end
     pulp.game_is_loaded = true
+end
+
+function pulp:newEvent(name)
+    return event_persist:new(name)
 end
 
 function pulp:exitRoom()
@@ -512,6 +547,7 @@ function pulp:enterRoom(rid)
         local x = (i-1) % TILESW
         pulp.roomtiles[y][x] = {
             id = tid,
+            name = pulp.tiles[tid].name,
             type = ACTOR_TYPE_TILE,
             tile = pulp.tiles[tid],
             fps = pulp.tiles[tid].fps,
@@ -544,6 +580,8 @@ function pulp:start()
     pulp.player.x = pulp.startx
     pulp.player.y = pulp.starty
     pulp.player.tile = pulp.tiles[pulp.playerid]
+    pulp.player.id = pulp.playerid
+    pulp.player.name = pulp.player.tile.name
     pulp.player.fps = pulp.player.tile.fps
     pulp.player.fps_lookup_idx = pulp.player.tile.fps_lookup_idx
     pulp.roomStart = true
@@ -552,18 +590,11 @@ end
 
 function pulp:emit(evname, event)
     -- FIXME: what if evname starts with "__"?
-    
     ;(pulp.gameScript[evname] or pulp.gameScript.any)(pulp.gameScript, nil, event)
     
     local roomScript = pulp:getCurrentRoom().script
     if roomScript then
         (roomScript[evname] or roomScript.any)(roomScript, pulp:getCurrentRoom(), event)
-    end
-    
-    -- player
-    local playerScript = pulp:getPlayerScript()
-    if playerScript then
-        (playerScript[evname] or playerScript.any)(playerScript, pulp.player, event)
     end
     
     -- tiles
@@ -574,6 +605,12 @@ function pulp:emit(evname, event)
                 (tileInstance.tile.script[evname] or tileInstance.tile.script.any)(tileInstance.tile.script, tileInstance, event)
             end
         end
+    end
+    
+    -- player
+    local playerScript = pulp:getPlayerScript()
+    if playerScript then
+        (playerScript[evname] or playerScript.any)(playerScript, pulp.player, event)
     end
 end
 
@@ -626,12 +663,66 @@ function pulp.__fn_play(...)
     -- todo
 end
 
-function pulp.__fn_draw(...)
-    -- todo
+local font_lookup_character <const> = {}
+for i=1,#alphabet do
+    font_lookup_character[string_byte(substr(alphabet, i, i))] = i
 end
 
-function pulp.__fn_label(...)
-    -- todo
+function pulp.__fn_label(x, y, text, len, lines)
+    assert(type(text) == "string")
+    local startx = x
+    local endy = nil
+    if lines then
+        endy = y + lines
+    end
+    if len then
+        len = min(len, #text)
+    else
+        len = #text
+    end
+    local i = 1
+    while i <= len do
+        local chr = string_byte(substr(text, i, i))
+        assert(chr)
+        if chr == string_byte("\n") then
+            x = startx
+            y += 1
+            if endy and y > endy then
+                return
+            end
+        elseif chr < 0x80 then
+            local chridx = font_lookup_character[chr] or 1
+            pulp.font_img[chridx]:draw(x * GRIDX, y * GRIDY)
+            x += 1
+        else
+            -- embed
+            -- decode tile
+            local numbytes = chr % 0x80
+            local frame = 0
+            local j = i
+            for k=numbytes,1,-1 do
+                i += 1
+                frame *= 0x80
+                local b = string_byte(substr(text, j+k, j+k)) % 0x80
+                frame += b
+            end
+            if frame <= #pulp.tile_img then
+                pulp.tile_img[frame]:draw(x * GRIDX, y * GRIDY)
+                x += 1
+            else
+                x += 1
+            end
+        end
+        i += 1
+    end
+end
+
+function pulp.__fn_draw(x, y, tid)
+    local tile = pulp:getTile(tid)
+    if tile and tile.frames then
+        local frame = tile.frames[1]
+        pulp.tile_img[frame]:draw(x * GRIDX, y * GRIDY)
+    end
 end
 
 function pulp.__fn_fill(...)
@@ -650,8 +741,14 @@ function pulp.__fn_toss(...)
     -- todo
 end
 
-function pulp.__fn_wait(...)
-    -- todo
+function pulp.__fn_wait(self, actor, event, block, duration)
+    pulp.timers[#pulp.timers+1] = {
+        duration = duration,
+        block = block,
+        self = self,
+        event = event,
+        actor = actor
+    }
 end
 
 function pulp.__fn_say(...)
@@ -674,7 +771,7 @@ function pulp.__fn_dump(...)
     -- todo
 end
 
-function pulp.__fn_goto(actor, x, y, room)
+function pulp.__fn_goto(x, y, room)
     if x then
         player.x = x
     end
@@ -682,7 +779,7 @@ function pulp.__fn_goto(actor, x, y, room)
         player.y = y
     end
     if room then
-        pulp.roomQueued = actor
+        pulp.roomQueued = room
     end
 end
 
@@ -710,22 +807,15 @@ function pulp.__fn_hide(x)
     pulp.hideplayer = true
 end
 
-function pulp.__fn_tell(x, y, event, block, actor)
-    if x and y then
-        local tilei = (pulp.roomtiles[y] or EMPTY)[x]
-        if tilei then
+function pulp.__fn_tell(event, block, actor)
+    if type(actor) == "string" or type(actor) == "number" then
+        pulp:forTiles(actor, function(x, y, tilei)
             block(tilei.script or EMPTY, tilei, event)
-        end
+        end)
+    elseif type(actor) == "table" then
+        block(actor.script or EMPTY, actor, event)
     else
-        if type(actor) == "string" or type(actor) == "number" then
-            pulp:forTiles(actor, function(x, y, tilei)
-                block(tilei.script or EMPTY, tilei, event)
-            end)
-        elseif type(actor) == "table" then
-            block(actor.script or EMPTY, actor, event)
-        else
-            assert(false, "invalid tell target")
-        end
+        assert(false, "invalid tell target")
     end
 end
 
@@ -736,6 +826,7 @@ function pulp.__fn_swap(actor, newid)
         if newtile then
             actor.tile = newtile
             actor.id = actor.tile.id
+            actor.name = actor.tile.name
             actor.fps = actor.tile.fps
             actor.fps_lookup_idx = actor.tile.fps_lookup_idx
         else
@@ -751,7 +842,7 @@ end
 -- subsequent bytes are 0x80 plus 7 bits of frame index, big-endian over bytes.
 -- this might be different from pulp original.
 function pulp.__ex_embed(tid)
-    local frame = pulp:getTile(tid).frames[1] or 0
+    local frame = pulp:getTile(tid).frames[1] or 1
     
     local frame_bh = frame
     local bytes = { 0x80 }
@@ -763,7 +854,7 @@ function pulp.__ex_embed(tid)
 
     local s = ""
     for _, byte in ipairs(bytes) do
-        s = s .. string.char(byte)
+        s = s .. string_char(byte)
     end
     return s
 end
@@ -786,28 +877,25 @@ function pulp.__ex_rpad(value, width, symbol)
     return value
 end
 
-function pulp.__ex_name(actor)
-    if actor then
-        if actor.type == ACTOR_TYPE_TILE then
-            return actor.tile.name or ""
-        else
-            -- UB!
-            return actor.name or ""
-        end
+function pulp.__ex_name(id)
+    if type(id) == "table" then
+        return id.name
     else
-        -- UB!
-        return ""
+        local tile = pulp.tiles[id]
+        if tile then
+            return tile.name
+        else
+            return ""
+        end
     end
 end
 
-function pulp.__ex_invert()
-    return pulp.invert and 1 or 0
+function pulp.__ex_type(...)
+    -- TODO
+    return 2
 end
 
-function pulp.__ex_degrees(x)
-    return x * 180 / math.pi
-end
-
-function pulp.__ex_radians(x)
-    return x * math.pi / 180
+function pulp.__ex_solid(...)
+    -- TODO
+    return 0
 end

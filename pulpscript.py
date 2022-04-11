@@ -8,6 +8,12 @@ class PulpScriptContext:
         self.indent = 1
         self.errors = []
         self.vars = set()
+        self.var_usage = {}
+        self.full_mimics = []
+        
+    def pingvar(self, varname):
+        self.vars.add(varname)
+        self.var_usage[varname] = self.var_usage.get(varname, 0) + 1
         
     def gi(self):
         return "  "*self.indent
@@ -33,7 +39,6 @@ funclist = [
     "frame",
     "fill",
     "swap",
-    "frame",
     "label",
     "restore",
     "store",
@@ -50,15 +55,18 @@ funclist = [
     "listen",
     "log",
     "dump",
+    "wait"
 ]
 
 exfuncs = [
+    "type",
+    "solid",
     "frame",
-    "name",
     "floor",
     "round",
     "ceil",
     "invert",
+    "name",
     "random",
     "sine",
     "cosine",
@@ -72,15 +80,22 @@ exfuncs = [
 inlinefuncs = {
     "__fn_frame": "{0}.frame = {1}",
     "__ex_frame": "({0}.frame or 0)",
+    "__ex_invert": "(__pulp.invert and 1 or 0)",
+    "__ex_degrees": "({0} * 360 / __tau)",
+    "__ex_radians": "({0} * __tau / 360)",
 }
 
+# specifies the order of the *first* arguments to these functions.
+# additional arguments may follow!
 funcargs = {
     "frame": ["actor"],
     "tell": ["x", "y", "block"],
-    "goto": ["actor", "x", "y"],
-    "tell": ["x", "y", "event", "block"],
+    "goto": ["x", "y"],
+    "tell": ["event", "block"],
     "swap": ["actor"],
-    "name": ["actor"]
+    "label": ["x", "y"],
+    "draw": ["x", "y"],
+    "wait": ["self", "actor", "event", "block"]
 }
 
 staticfuncs = {
@@ -103,44 +118,55 @@ def istoken(s):
         return False
     return True
 
+tile_ids = dict() # populated in pulplua.py
+
+def optimize_name_ref(cmd, idx):
+    if len(cmd) > idx:
+        if type(cmd[idx]) == str and cmd[idx] in tile_ids:
+            cmd[idx] = [
+                "optimized-id",
+                tile_ids[cmd[idx]],
+                cmd[idx]
+            ]
+            return True
+    return False
+
 def ex_get(expression, ctx):
-    ctx.vars.add(expression[1])
+    ctx.pingvar(expression[1])
     return expression[1]
     
 def ex_format(expression, ctx):
     s = ""
-    args = []
-    subnewline = False
+    first = True
     for component in expression[1:]:
-        if type(component) == str:
-            s += component
-            if "\n" in s:
-                subnewline = True
+        if not first:
+            s += " .. "
+        first = False
+        if type(component) is str:
+            s += decode_rvalue(component, ctx)
         else:
-            args.append(component)
-    
-    ctx.format_embeds = []
-    if subnewline:
-        s = 'string.format([[' + s + ']]'
-    else:
-        s = 'string.format("' + s + '"'
-    for arg in args:
-        if type(arg) == list and arg[0] == "embed":
-            pass
-        else:
-            s += f", tostring({decode_rvalue(arg, ctx)})"
-    s += ")"
+            s += "__tostring(" + decode_rvalue(component, ctx) + ")"
+            
     return s
 
 def ex_embed(expression, ctx):
     return f"__pulp.__ex_embed({decode_rvalue(expression[1], ctx)})"
 
 def ex_subroutine(expression, ctx):
-    s = "function(self, __actor, event)\n"
+    s = "function(__self, __actor, event)\n"
     ctx.indent += 2
     s += transpile_commands(ctx.blocks[expression[1]], ctx)
     ctx.indent -= 2
     return s + ctx.gi() + "  end"
+    
+def ex_name(expression, ctx):
+    if type(expression[1]) == list and expression[1][0] == "xy":
+        x = decode_rvalue(expression[1][1], ctx)
+        y = decode_rvalue(expression[1][2], ctx)
+        #return f"(((__pulp.roomtiles[{y}] or __pulp.EMPTY)[{x}] or __pulp.EMPTY).tile or __pulp.EMPTY).name or \"\""
+        return f"__pulp.roomtiles[{y}][{x}].name"
+    else:
+        return opex_func(expression, "name", "__ex_", ctx)
 
 def decode_rvalue(expression, ctx):
     if type(expression) == str:
@@ -151,10 +177,14 @@ def decode_rvalue(expression, ctx):
         ex = expression[0]
         if ex == "get":
             return ex_get(expression, ctx)
+        elif ex == "optimized-id":
+            return f"--[[({expression[2]})]] "+str(expression[1])
         elif ex == "format":
             return ex_format(expression, ctx)
         elif ex == "embed":
             return ex_embed(expression, ctx)
+        elif ex == "name":
+            return ex_name(expression, ctx)
         elif ex in exfuncs:
             return opex_func(expression, ex, "__ex_", ctx)
         elif ex == "block":
@@ -166,7 +196,7 @@ def decode_rvalue(expression, ctx):
 def op_set(cmd, operator, ctx):
     lvalue = cmd[1]
     assert (type(lvalue) == str)
-    ctx.vars.add(lvalue)
+    ctx.pingvar(lvalue)
     rvalue = decode_rvalue(cmd[2], ctx)
     if operator == "" or RELASSIGN:
         return f"{lvalue} {operator}= {rvalue}"
@@ -180,6 +210,7 @@ def op_block(cmd, statement, follow, end, ctx):
     compsym = compdict[comparison]
     if istoken(condition[1]):
         compl = condition[1]
+        ctx.pingvar(compl)
     else:
         compl = decode_rvalue(condition[1], ctx)
     compr = decode_rvalue(condition[2], ctx)
@@ -192,7 +223,7 @@ def op_block(cmd, statement, follow, end, ctx):
     
     for sub in cmd[3:]:
         if sub[0] == "elseif":
-            s += op_block(sub, "elseif", "then", None, ctx)
+            s += ctx.gi() + op_block(sub, "elseif", "then", None, ctx)
         elif sub[0] == "else":
             s += ctx.gi() + "else\n"
             ctx.indent += 1
@@ -206,32 +237,83 @@ def op_block(cmd, statement, follow, end, ctx):
     if end:
         s += ctx.gi() + end
     return s
-    
+
 def op_call(cmd, ctx):
+    global EVNAMECOUNTER
     if istoken(cmd[1]):
-        callfn = f"self.{cmd[1]}"
+        fnstr = f"\"{cmd[1]}\""
+        callfn = f"__self.{cmd[1]}"
     else:
-        callfn = f"self[{decode_rvalue(cmd[1], ctx)}]"
-    return f"if {callfn} or self.any then ({callfn} or self.any)(self, __actor, event) end"
+        fnstr = decode_rvalue(cmd[1], ctx)
+        callfn = f"__self[{fnstr}]"
+    s = f"do -- (call)\n"
+    ctx.indent += 1
+    s += ctx.gi() + "local __event_name__ = event.__name\n"
+    s += ctx.gi() + f"event.__name = {fnstr};\n"
+    s += ctx.gi() + f"({callfn} or __self.any)(__self, __actor, event)\n"
+    s += ctx.gi() + f"event.__name = __event_name__\n"
+    ctx.indent -= 1
+    s += ctx.gi() + f"end"
+    return s
         
 def op_emit(cmd, ctx):
     return f"__pulp:emit({decode_rvalue(cmd[1], ctx)}, __actor, event)"
     
 def op_mimic(cmd, ctx):
-    s = f"__pulp:getScriptEventByName({decode_rvalue(cmd[1], ctx)}, event.__name)"
-    return s + "(self, __actor, event) -- (Mimic)"
+    if optimize_name_ref(cmd, 1) or type(cmd[1]) == int:
+        s = f"do -- (mimic)\n"
+        ctx.indent += 1
+        s += ctx.gi() + f"local __mimic_target__ = (__pulp.tiles[{decode_rvalue(cmd[1], ctx)}] or __pulp.EMPTY).script or __pulp.EMPTY;\n"
+        s += ctx.gi() + "(__mimic_target__[event.__name] or __mimic_target__.any)(__self, __actor, event)\n"
+        ctx.indent -= 1
+        s += ctx.gi() + "end"
+        return s
+    else:
+        s = f"__pulp:getScriptEventByName({decode_rvalue(cmd[1], ctx)}, event.__name)"
+        return s + "(__self, __actor, event) -- (mimic)"
     
 def op_tell(cmd, ctx):
-    if type(cmd[1]) == list and cmd[1][1] == "xy":
-        pass
+    if type(cmd[1]) == list and cmd[1][0] == "xy":
+        # inline version of 'tell x,y to'
+        s = "do --tell x,y to\n"
+        ctx.indent += 1
+        assert cmd[2][0] == "block"
+        s += ctx.gi() + f"local __actor = __pulp.roomtiles[{decode_rvalue(cmd[1][2], ctx)}][{decode_rvalue(cmd[1][1], ctx)}]\n"
+        s += ctx.gi() + f"if __actor and __actor.tile then\n"
+        ctx.indent += 1
+        s += ctx.gi() + f"local __self = __actor.tile.script or __pulp.EMPTY\n"
+        s += transpile_commands(ctx.blocks[cmd[2][1]], ctx)
+        ctx.indent -= 1
+        s += ctx.gi() + f"end\n"
+        ctx.indent -= 1
+        s += ctx.gi() + "end\n"
+        return s
+    elif type(cmd[1]) == list and cmd[1][0] == "get" and cmd[1][1] in ["event.room", "event.game"]:
+        # inline version of 'tell event.X to'
+        target = cmd[1][1]
+        s = f"do --tell {target} to\n"
+        ctx.indent += 1
+        assert cmd[2][0] == "block"
+        s += ctx.gi() + f"local __actor = {target}\n"
+        s += ctx.gi() + f"if __actor then\n"
+        ctx.indent += 1
+        s += ctx.gi() + f"local __self = __actor.script or __pulp.EMPTY\n"
+        s += transpile_commands(ctx.blocks[cmd[2][1]], ctx)
+        ctx.indent -= 1
+        s += ctx.gi() + f"end\n"
+        ctx.indent -= 1
+        s += ctx.gi() + "end\n"
+        return s
     else:
+        optimize_name_ref(cmd, 1)
         return opex_func(cmd, "tell", "__fn_", ctx)
     
 def opex_func(cmd, op, prefix, ctx):
     mainargs = []
     setargs = {
+        "self": "__self",
         "actor": "__actor",
-        "event": "event"
+        "event": "event",
     }
         
     for arg in cmd[1:]:
@@ -322,14 +404,23 @@ def transpile_commands(commands, ctx):
     return s
         
 def transpile_event(evobj, evname, ctx, blockidx):
-    _evobj = evobj
-    if not istoken(evobj):
-        _evobj = f"__pulp:getScript(\"{evobj}\")"
-    if istoken(evname) and istoken(evobj):
-        s = f"function {_evobj}:{evname}(__actor, event)\n"
+    _evobj = f"__pulp:getScript(\"{evobj}\")"
+    if istoken(evname):
+        s = f"{_evobj}.{evname} = function(__self, __actor, event)\n"
     else:
-        s = f"{_evobj}[\"{evname}\"] = function(self, __actor, event)\n"
-        
+        s = f"{_evobj}[\"{evname}\"] = function(__self, __actor, event)\n"
+    
+    block = ctx.blocks[blockidx]
     s += transpile_commands(ctx.blocks[blockidx], ctx)
     s += "end\n"
+    
+    #optimization for one-line-only mimics
+    undecorated_block = list(filter(lambda x: type(x) == list and x[0] not in ["_", "#", "#$"], block))
+    if len(undecorated_block) == 1 and undecorated_block[0][0] == "mimic":
+        mimic = undecorated_block[0]
+        # TODO: if int instead of optimized-id
+        if type(mimic[1]) == list and mimic[1][0] == "optimized-id":
+            mimic[1][2]
+            ctx.full_mimics.append((evobj, evname, mimic[1][2]))
+    
     return s
