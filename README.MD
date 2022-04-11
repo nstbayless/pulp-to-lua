@@ -29,5 +29,4 @@ While `pulp-to-lua` should already significantly improve performance by an order
 
 ## Contributions
 
-Contributions are welcome! Here are some things that could use work:
-- __fn_swap direct-id optimization
+Contributions are welcome! Ask the author (NaOH#1432 on [discord](https://discord.gg/VNVQHSS49U)) for advice.
