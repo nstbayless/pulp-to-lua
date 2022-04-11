@@ -1,0 +1,15 @@
+pulp-to-lua © NaOH 2022.
+
+Different terms apply for pulp-to-lua vs. projects created with pulp-to-lua.
+
+(1) For the purpose of transpiling pulp projects for which you are an author or for which you have the authority to do so, or for your own personal use,
+    there are no restrictions as to the use of pulp-to-lua (even if your game is sold commercially). It would be kind to credit pulp-to-lua and perhaps
+    its primary author (NaOH), but that is not necessary.
+(2) outside of (1), the pulp-to-lua may not be used, nor may any portion of its source code be reproduced, for any reason other than personal use or for
+    the purpose of contributing to the pulp-to-lua project.
+(3) pulp-to-lua may be used by one party on behalf of another, but the following restrictions apply:
+    - the source code for pulp-to-lua must be made available upon request,
+    - it should be made clear that the source code is freely available,
+    - no one shall charge payment for the use of pulp-to-lua
+
+Exemptions to these terms may be granted only by express written permission from the primary author (NaOH).
