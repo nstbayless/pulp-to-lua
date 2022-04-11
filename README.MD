@@ -25,7 +25,7 @@ You can then compile using `pdc` as normal:
 
 While `pulp-to-lua` should already significantly improve performance by an order of magnitude at least, there are additional steps you can take to make sure your code runs optimally:
 
-    - Avoid using `emit` wherever possible. This function is slow and it is usually preferable to use `call` unless you really do want all actors to respond.
+- Avoid using `emit` wherever possible. This function is slow and it is usually preferable to use `call` unless you really do want all actors to respond.
 
 ## Contributions
 
