@@ -28,6 +28,9 @@ playerid = pulp["player"]["id"]
 startroom = pulp["player"]["room"]
 halfwidth = pulp["font"]["type"] != 1
 
+ROOMW = 25
+ROOMH = 15
+
 ctx = PulpScriptContext()
 
 def startcode():
@@ -190,19 +193,20 @@ for room in pulp["rooms"]:
     code += "  exits = {\n"
     for exit in room["exits"]:
         code += "    {\n"
-        code += f"      x = {exit['x']},\n"
-        code += f"      y = {exit['y']},\n"
+        code += f"      x = {clamp(exit['x'], 0, ROOMW)},\n"
+        code += f"      y = {clamp(exit['y'], 0, ROOMH)},\n"
         #code += f"      id = {exit['id']},\n"
         if "tx" in exit:
-            code += f"      tx = {clamp(exit['tx'], 0,24)},\n"
+            code += f"      tx = {exit['tx']},\n"
         if "ty" in exit:
-            code += f"      ty = {clamp(exit['ty'], 0, 14)},\n"
+            code += f"      ty = {exit['ty']},\n"
         if "edge" in exit:
             code += f"      edge = {exit['edge']},\n"
         if "fin" in exit:
-            code += f"      fin = {exit['fin']},\n"
-        code += f"      room = {exit['room']}\n"
-        code += "    },\n"
+            code += f"      fin = [[{exit['fin']}]],\n"
+        if "room" in exit:
+            code += f"      room = {exit['room']},\n"
+        code += "    nil},\n"
     code += "  nil},\n"
     code += "}\n"
 

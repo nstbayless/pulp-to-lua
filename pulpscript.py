@@ -52,6 +52,8 @@ funclist = [
     "wait",
     "say",
     "ask",
+    "menu",
+    "option",
     "act",
     "loop",
     "once",
@@ -62,6 +64,7 @@ funclist = [
     "log",
     "dump",
     "wait",
+    "window",
 ]
 
 exfuncs = [
@@ -97,14 +100,18 @@ inlinefuncs = {
 # additional arguments may follow!
 funcargs = {
     "frame": ["actor"],
-    "tell": ["x", "y", "block"],
     "goto": ["x", "y"],
     "tell": ["event", "block"],
     "swap": ["actor"],
-    "label": ["x", "y"],
+    "label": ["x", "y", "len", "lines"],
     "draw": ["x", "y"],
     "wait": ["self", "actor", "event", "block"],
-    "solid": ["x", "y"]
+    "solid": ["x", "y"],
+    "say": ["x", "y", "w", "h", "self", "actor", "event", "block"],
+    "ask": ["x", "y", "w", "h", "self", "actor", "event", "block"],
+    "menu": ["x", "y", "w", "h", "self", "actor", "event", "block"],
+    "option": ["self", "actor", "event", "block"],
+    "window": ["x", "y", "w", "h"],
 }
 
 staticfuncs = {
@@ -189,6 +196,8 @@ def decode_rvalue(expression, ctx):
         return '"' + escape_string(str(expression)) + '"'
     elif type(expression) == int or type(expression) == float:
         return str(expression)
+    elif expression is None:
+        return "nil"
     else:
         ex = expression[0]
         if ex == "get":
