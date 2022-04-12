@@ -180,7 +180,7 @@ def clamp(x, a, b):
     return min(max(x, a), b)
 
 # rooms
-code += "\n__pulp.rooms = {}"
+code += "\n__pulp.rooms = {}\n"
 for room in pulp["rooms"]:
     code += f"__pulp.rooms[{room['id']}] = " + "{\n"
     code += f"  id = {room['id']},\n"
@@ -209,6 +209,35 @@ for room in pulp["rooms"]:
         code += "    nil},\n"
     code += "  nil},\n"
     code += "}\n"
+    
+# sounds
+code += "\n__pulp.sounds = {}\n"
+for sound in pulp["sounds"]:
+    code += f"__pulp.sounds[{sound['id']}] = " + "{\n"
+    code += f"  bpm = {sound['bpm']},\n"
+    code += f"  name = \"{sound['name']}\",\n"
+    code += f"  type = {sound['type']},\n"
+    if 'notes' in sound:
+        code += "  notes = {"
+        for note in sound['notes']:
+            code += "{note}, "
+        code += "},\n"
+    if 'ticks' in sound:
+        code += f"  ticks = {sound['ticks']},\n"
+    if 'envelope' in sound:
+        if 'decay' in sound['envelope']:
+            code += f"  decay = {sound['envelope']['decay']},\n"
+        if 'attack' in sound['envelope']:
+            code += f"  attack = {sound['envelope']['attack']},\n"
+        if 'release' in sound['envelope']:
+            code += f"  release = {sound['envelope']['release']},\n"
+        if 'volume' in sound['envelope']:
+            code += f"  volume = {sound['envelope']['volume']},\n"
+        if 'sustain' in sound['envelope']:
+            code += f"  sustain = {sound['envelope']['sustain']},\n"
+    code += "}\n"
+    
+code += "\n__pulp.songs = {}\n"
 
 for pulpscript in pulp["scripts"]:
     script = Script(pulpscript["id"], pulpscript["type"])
