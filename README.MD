@@ -27,6 +27,10 @@ While `pulp-to-lua` should already significantly improve performance by an order
 
 - Avoid using `emit` wherever possible. This function is slow and it is usually preferable to use `call` unless you really do want all actors to respond.
 
+## Incompatabilities
+
+- The transpilation is likely not perfect. Some behaviour may differ. You can help by reporting behaviourial differences.
+
 ## Contributions
 
 Contributions are welcome! Ask the author (NaOH#1432 on [discord](https://discord.gg/VNVQHSS49U)) for advice.

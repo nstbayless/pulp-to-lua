@@ -1,5 +1,6 @@
 *.json
 *.pdx
 out/
+out-*/
 out.lua
 __pycache__

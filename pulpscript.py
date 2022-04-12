@@ -14,6 +14,12 @@ class PulpScriptContext:
     def pingvar(self, varname):
         self.vars.add(varname)
         self.var_usage[varname] = self.var_usage.get(varname, 0) + 1
+        if varname.startswith("__"):
+            # to prevent namespace conflicts, we append additional underscores if the variable name
+            # starts with two underscores.
+            return "__" + varname
+        else:
+            return varname
         
     def gi(self):
         return "  "*self.indent
@@ -55,7 +61,7 @@ funclist = [
     "listen",
     "log",
     "dump",
-    "wait"
+    "wait",
 ]
 
 exfuncs = [
@@ -79,6 +85,8 @@ exfuncs = [
 
 inlinefuncs = {
     "__fn_frame": "{0}.frame = {1}",
+    "__fn_inc": "{0} += 1",
+    "__fn_dec": "{0} -= 1",
     "__ex_frame": "({0}.frame or 0)",
     "__ex_invert": "(__pulp.invert and 1 or 0)",
     "__ex_degrees": "({0} * 360 / __tau)",
@@ -95,7 +103,8 @@ funcargs = {
     "swap": ["actor"],
     "label": ["x", "y"],
     "draw": ["x", "y"],
-    "wait": ["self", "actor", "event", "block"]
+    "wait": ["self", "actor", "event", "block"],
+    "solid": ["x", "y"]
 }
 
 staticfuncs = {
@@ -108,6 +117,13 @@ staticfuncs = {
     "tangent": "__tan",
     "random": "__random"
 }
+
+# adds backslashes
+def escape_string(s):
+    return s.replace("\\","\\\\") \
+        .replace("\n", "\\n") \
+        .replace("\f", "\\f") \
+        .replace("\"", "\\\"")
 
 def istoken(s):
     if type(s) != str:
@@ -132,7 +148,7 @@ def optimize_name_ref(cmd, idx):
     return False
 
 def ex_get(expression, ctx):
-    ctx.pingvar(expression[1])
+    expression[1] = ctx.pingvar(expression[1])
     return expression[1]
     
 def ex_format(expression, ctx):
@@ -163,14 +179,14 @@ def ex_name(expression, ctx):
     if type(expression[1]) == list and expression[1][0] == "xy":
         x = decode_rvalue(expression[1][1], ctx)
         y = decode_rvalue(expression[1][2], ctx)
-        #return f"(((__pulp.roomtiles[{y}] or __pulp.EMPTY)[{x}] or __pulp.EMPTY).tile or __pulp.EMPTY).name or \"\""
-        return f"__pulp.roomtiles[{y}][{x}].name"
+        #return f"(((__roomtiles[{y}] or __pulp.EMPTY)[{x}] or __pulp.EMPTY).tile or __pulp.EMPTY).name or \"\""
+        return f"__roomtiles[{y}][{x}].name"
     else:
         return opex_func(expression, "name", "__ex_", ctx)
 
 def decode_rvalue(expression, ctx):
     if type(expression) == str:
-        return '"' + str(expression).replace("\n", "\\n") + '"'
+        return '"' + escape_string(str(expression)) + '"'
     elif type(expression) == int or type(expression) == float:
         return str(expression)
     else:
@@ -196,7 +212,7 @@ def decode_rvalue(expression, ctx):
 def op_set(cmd, operator, ctx):
     lvalue = cmd[1]
     assert (type(lvalue) == str)
-    ctx.pingvar(lvalue)
+    lvalue = ctx.pingvar(lvalue)
     rvalue = decode_rvalue(cmd[2], ctx)
     if operator == "" or RELASSIGN:
         return f"{lvalue} {operator}= {rvalue}"
@@ -210,7 +226,7 @@ def op_block(cmd, statement, follow, end, ctx):
     compsym = compdict[comparison]
     if istoken(condition[1]):
         compl = condition[1]
-        ctx.pingvar(compl)
+        compl = ctx.pingvar(compl)
     else:
         compl = decode_rvalue(condition[1], ctx)
     compr = decode_rvalue(condition[2], ctx)
@@ -278,10 +294,10 @@ def op_tell(cmd, ctx):
         s = "do --tell x,y to\n"
         ctx.indent += 1
         assert cmd[2][0] == "block"
-        s += ctx.gi() + f"local __actor = __pulp.roomtiles[{decode_rvalue(cmd[1][2], ctx)}][{decode_rvalue(cmd[1][1], ctx)}]\n"
+        s += ctx.gi() + f"local __actor = __roomtiles[{decode_rvalue(cmd[1][2], ctx)}][{decode_rvalue(cmd[1][1], ctx)}]\n"
         s += ctx.gi() + f"if __actor and __actor.tile then\n"
         ctx.indent += 1
-        s += ctx.gi() + f"local __self = __actor.tile.script or __pulp.EMPTY\n"
+        s += ctx.gi() + f"local __self = __actor.script or __pulp.EMPTY\n"
         s += transpile_commands(ctx.blocks[cmd[2][1]], ctx)
         ctx.indent -= 1
         s += ctx.gi() + f"end\n"
@@ -359,6 +375,9 @@ def opex_func(cmd, op, prefix, ctx):
         s += arg
     return s + ")"
 
+def op_inc(cmd, operator, ctx):
+    return cmd[1] + operator
+
 def transpile_command(cmd, ctx):
     op = cmd[0]
     
@@ -374,6 +393,10 @@ def transpile_command(cmd, ctx):
         return ctx.gi() + op_set(cmd, "/", ctx) + "\n"
     elif op == "mul":
         return ctx.gi() + op_set(cmd, "*", ctx) + "\n"
+    elif op == "inc":
+        return ctx.gi() + op_inc(cmd, "+=1", ctx) + "\n"
+    elif op == "inc":
+        return ctx.gi() + op_inc(cmd, "-=1", ctx) + "\n"
     elif op == "if":
         return ctx.gi() + op_block(cmd, "if", "then", "end", ctx) + "\n"
     elif op == "while":

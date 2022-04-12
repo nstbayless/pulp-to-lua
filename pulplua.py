@@ -5,7 +5,7 @@ import os
 import shutil
 from tkinter import font
 from store import LuaOut as LuaOut
-from pulpscript import transpile_event, PulpScriptContext, istoken, tile_ids
+from pulpscript import transpile_event, PulpScriptContext, istoken, tile_ids, escape_string
 from PIL import Image
 
 if len(sys.argv) >= 2:
@@ -20,6 +20,9 @@ if len(sys.argv) >= 3:
 
 with open(file) as f:
     pulp = json.load(f)
+
+scripttypes = ["global", "room", "tile"]
+tiletypes = ["world", "player", "sprite", "item", "exit"]
 
 playerid = pulp["player"]["id"]
 startroom = pulp["player"]["room"]
@@ -50,6 +53,7 @@ def startcode():
     code += "local __random <const> = math.random\n"
     code += "local __tau <const> = math.pi * 2\n"
     code += "local __tostring <const> = tostring\n"
+    code += "local __roomtiles <const> = __pulp.roomtiles\n"
     return code
     
 def endcode():
@@ -57,16 +61,20 @@ def endcode():
     code += "__pulp:start()\n"
     return code
     
-def write_data_to_image(img, y, data):
+def write_data_to_image(img, y, data, hasalpha=False):
     i = 0
     for p in data:
-        assert p == 0 or p == 1
-        img.putpixel((i % img.width, y + i // img.width), 1 - (p%2))
+        assert p == 0 or p == 1 or (hasalpha and (p == 2 or p == 3)), f"pixel is {p}"
+        if i % 8 < img.width:
+            img.putpixel(
+                (i % 8, y + i // 8),
+                (0xff * (1 - p%2), 0 if p >= 2 else 0xff) if hasalpha else (1 - (p%2))
+            )
         i += 1
     
 # images (font, borders)
 borderimage = Image.new("1", (8, 8 * len(pulp["font"]["pipe"])))
-fontimage = Image.new("1", (4 if halfwidth else 8, 8 * len(pulp["font"]["chars"])))
+fontimage = Image.new("1", (8, 8 * len(pulp["font"]["chars"])))
 
 y = 0
 for data in pulp["font"]["pipe"]:
@@ -94,12 +102,17 @@ for frame in pulp["frames"]:
     else:
         # TODO: what does 'false' actually mean..?
         tileimages.append(0)
-            
-frame_img = Image.new("1", (8, 8 * len(uniqueimagelist)))
+
+hasalpha = False
+for data in uniqueimagelist:
+    if 2 in data or 3 in data:
+        hasalpha = True
+        break
+frame_img = Image.new("LA" if hasalpha else "1", (8, 8 * len(uniqueimagelist)))
 y = 0
 print("writing image data...")
 for data in uniqueimagelist:
-    write_data_to_image(frame_img, y, data)
+    write_data_to_image(frame_img, y, data, hasalpha)
     y += 8
 print("done.")
 # scripts
@@ -114,8 +127,6 @@ def getScriptName(type, id):
     
     ctx.errors += [f"unknown script, type {type}, id {id}"]
     return f"__UNKNOWN_SCRIPT_{type}_{id}"
-
-scripttypes = ["global", "room", "tile"]
 
 class Script:
     def __init__(self, id, type) -> None:
@@ -140,24 +151,30 @@ class Script:
 
 code = startcode()
 
-# images
+# tiles
 tile_id = 0
 
 code += "\n__pulp.tiles = {}\n"
 for tile in pulp["tiles"]:
-    tile_ids[tile['name']] = tile['id']
-    code += f"__pulp.tiles[{tile['id']}] = " + "{\n"
-    code += f"    id = {tile['id']},\n"
-    code += f"    fps = {tile['fps']},\n"
-    code += f"    name = \"{tile['name']}\",\n"
-    code += f"    type = {tile['type']},\n"
-    code += f"    btype = {tile['btype']},\n"
-    code += f"    solid = {tile['solid']},\n".lower()
-    code += "    frames = {\n"
-    for frame in tile["frames"]:
-        code += f"      {tileimages[frame]+1},\n"
-    code += "    nil}\n"
-    code += "  }\n"
+    if tile:
+        tile_ids[tile['name']] = tile['id']
+        code += f"__pulp.tiles[{tile['id']}] = " + "{\n"
+        code += f"    id = {tile['id']},\n"
+        code += f"    fps = {tile['fps']},\n"
+        code += f"    name = \"{tile['name']}\",\n"
+        code += f"    type = {tile['type']},\n"
+        code += f"    btype = {tile['btype']},\n" # behaviour type?
+        code += f"    solid = {tile['solid']},\n".lower()
+        if "says" in tile:
+            code += f"    says = \"{escape_string(tile['says'])}\","
+        code += "    frames = {\n"
+        for frame in tile["frames"]:
+            code += f"      {tileimages[frame]+1},\n"
+        code += "    nil}\n"
+        code += "  }\n"
+
+def clamp(x, a, b):
+    return min(max(x, a), b)
 
 # rooms
 code += "\n__pulp.rooms = {}"
@@ -169,17 +186,34 @@ for room in pulp["rooms"]:
     code += "  tiles = {\n"
     for tile in room["tiles"]:
         code += f"    {tile},\n"
-    code += "  nil}\n"
-    # TODO: exits
+    code += "  nil},\n"
+    code += "  exits = {\n"
+    for exit in room["exits"]:
+        code += "    {\n"
+        code += f"      x = {exit['x']},\n"
+        code += f"      y = {exit['y']},\n"
+        #code += f"      id = {exit['id']},\n"
+        if "tx" in exit:
+            code += f"      tx = {clamp(exit['tx'], 0,24)},\n"
+        if "ty" in exit:
+            code += f"      ty = {clamp(exit['ty'], 0, 14)},\n"
+        if "edge" in exit:
+            code += f"      edge = {exit['edge']},\n"
+        if "fin" in exit:
+            code += f"      fin = {exit['fin']},\n"
+        code += f"      room = {exit['room']}\n"
+        code += "    },\n"
+    code += "  nil},\n"
     code += "}\n"
 
 for pulpscript in pulp["scripts"]:
     script = Script(pulpscript["id"], pulpscript["type"])
-    for key in pulpscript["data"]:
-        if not key.startswith("__"):
-            assert pulpscript["data"][key][0] == "block"
-            blockidx = pulpscript["data"][key][1]
-            script.addEvent(key, pulpscript["data"]["__blocks"], blockidx)
+    if "data" in pulpscript:
+        for key in pulpscript["data"]:
+            if not key.startswith("__"):
+                assert pulpscript["data"][key][0] == "block"
+                blockidx = pulpscript["data"][key][1]
+                script.addEvent(key, pulpscript["data"]["__blocks"], blockidx)
     code += script.code
     LuaOut.scripts.append(script)
 
@@ -209,6 +243,7 @@ vars = list(ctx.vars)
 vars.sort(key=lambda var: -ctx.var_usage[var])
 varcode = ""
 LOCVARMAX = 160 # chosen rather arbitrarily. 200 is too high though; it won't compile.
+locvars = []
 i = 0
 for var in vars:
     assert not var.startswith("__"), "variables cannot start with __."
@@ -217,9 +252,29 @@ for var in vars:
             # TODO: optimize local variables by usage
             varcode += "local "
             i += 1
+            locvars.append(var)
         varcode += f"{var} = 0\n"
 code = varcode + "\n" + code
 code += endcode()
+
+code += "local __LOCVARSET = {\n"
+for var in locvars:
+    code += f"  [\"{var}\"] = function(__{var}) {var} = __{var} end,\n"
+code += "nil}\n"
+code += "local __LOCVARGET = {\n"
+for var in locvars:
+    code += f"  [\"{var}\"] = function() return {var} end,\n"
+code += "nil}\n"
+code += "function __pulp.setvariable(varname, value)\n"
+code += "  if varname:find(\"__\") then varname = \"__\" .. varname end -- prevent namespace conflicts with builtins\n"
+code += "  local __varsetter = __LOCVARSET[varname]\n"
+code += "  if __varsetter then __varsetter(value) else _G[varname] = value end\n"
+code += "end\n"
+code += "function __pulp.getvariable(varname)\n"
+code += "  if varname:find(\"__\") then varname = \"__\" .. varname end -- prevent namespace conflicts with builtins\n"
+code += "  local __vargetter = __LOCVARGET[varname]\n"
+code += "  if __vargetter then return __vargetter() else return _G[varname] end\n"
+code += "end\n"
 
 for error in list(set(ctx.errors)):
     print("--" + str(error))
