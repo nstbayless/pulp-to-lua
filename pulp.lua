@@ -274,7 +274,7 @@ end
 
 local function default_event_interact(script, tilei, event)
     if tilei.tile.says then
-        pulp.__fn_say(nil, nil, nil, nil, nil, script, tilei, event, tilei.tile.says)
+        pulp.__fn_say(nil, nil, nil, nil, script, tilei, event, nil, tilei.tile.says)
     end
 end
 
@@ -283,7 +283,7 @@ local function default_event_collect(script, tilei, event)
     pulp.setvariable(tilei.name .. "s", pulp.getvariable(tilei.name .. "s") + 1)
     pulp.__fn_swap(tilei, 0)
     if says then
-        pulp.__fn_say(nil, nil, nil, nil, nil, script, tilei, event, says)
+        pulp.__fn_say(nil, nil, nil, nil, script, tilei, event, nil, says)
     end
 end
 
@@ -355,6 +355,8 @@ local left_press_time = false
 local right_press_time = false
 
 local function updateMessage(up, down, left, right, confirm, cancel)
+    -- FIXME: yes, this is pretty messy.
+    
     local message = pulp.message
     local text = (message.text or EMPTY)[message.page]
     -- TODO: crank can also dismiss 
@@ -392,7 +394,45 @@ local function updateMessage(up, down, left, right, confirm, cancel)
         elseif down then
             message.optselect += 1
         end
-        message.optselect = max(min(message.optselect, #message.options), 1)
+        if message.opth then
+            if left and message.firstopt ~= 1 then
+                message.firstopt -= message.opth
+                message.optselect -= message.opth
+            end
+            if right and message.firstopt + message.opth <= #message.options then
+                message.firstopt += message.opth
+                message.optselect += message.opth
+            end
+            
+            if message.firstopt <= 1 then
+                message.firstopt = 1
+            elseif message.firstopt > #message.options then
+                message.firstopt -= message.opth
+            end
+        end
+        
+        if up or down then
+            if message.opth then
+                if message.optselect < message.firstopt then
+                    message.optselect = message.firstopt + message.opth
+                elseif message.optselect > message.firstopt + message.opth - 1 or message.optselect > #message.options then
+                    message.optselect = message.firstopt
+                end
+            else
+                if message.optselect < 1 then
+                    message.optselect = #message.options
+                elseif message.optselect > #message.options then
+                    message.optselect = 1
+                end
+            end
+        end
+        
+        if message.opth then
+            message.optselect = max(min(message.optselect, message.firstopt + message.opth - 1), message.firstopt)
+        end
+        
+        message.optselect = max(min(message.optselect, #message.options), 1) -- paranoia
+        
         if confirm then
             local option = message.options[message.optselect]
             
@@ -490,17 +530,27 @@ local function drawMessage(message, submenu)
         
         pulp.__fn_window(optx - 2, opty - 1, optw + 2, opth + 1)
         
-        for i = 1,#message.options do
+        local y = 0
+        for i = message.firstopt,#message.options do
+            if y >= opth then
+                break
+            end
             local option = message.options[i]
             local text = option.text
             if #text > optw then
                 text = substr(text, 1, optw)
             end
-            pulp.__fn_label(optx, opty + i - 1, nil, nil, text)
+            pulp.__fn_label(optx, opty + y, nil, nil, text)
+            y += 1
         end
         
         -- cursor
-        pulp.pipe_img[submenu and 13 or 12]:draw((optx - 1) * GRIDX, (opty + message.optselect - 1) * GRIDY)
+        pulp.pipe_img[submenu and 13 or 12]:draw((optx - 1) * GRIDX, (opty + message.optselect - message.firstopt) * GRIDY)
+        
+        if #message.options > opth then
+            -- page icon
+            pulp.pipe_img[14]:draw(GRIDX * (optx + optw - 1), GRIDY * (opty + opth))
+        end
     end
 end
 
@@ -615,44 +665,44 @@ local function readInput()
                 local event = event_persist:new("cancel");
                 (playerScript.cancel or playerScript.any)(playerScript, pulp.player, event)
             end
-            if (up_pressed or down_pressed or left_pressed or right_pressed) then
                 
-                local do_exit = false
-                if pulp.listen then
-                    -- check for exits
-                    -- TODO: only do this if player has moved since previous frame
-                    local x = player.x
-                    local y = player.y
-                    for i = 1,#__exits do
-                        local exit = __exits[i]
-                        if exit.edge == nil then
-                            do_exit = x == exit.x and y == exit.y
-                        elseif exit.edge == 1 then
-                            do_exit = x == exit.x and event_persist.dx > 0
-                        elseif exit.edge == 2 then
-                            do_exit = y == exit.y and event_persist.dy > 0
-                        elseif exit.edge == 3 then
-                            do_exit = x == exit.x and event_persist.dx < 0
-                        elseif exit.edge == 4 then
-                            do_exit = y == exit.y and event_persist.dy < 0
-                        end
-                        if do_exit then
-                            if exit.fin then
-                                pulp.__fn_fin(exit.fin)
-                            else
-                                if exit.edge == nil then
-                                    pulp.__fn_goto(exit.tx, exit.ty, exit.room)
-                                elseif exit.edge == 1 or exit.edge == 3 then
-                                    pulp.__fn_goto(exit.tx, y, exit.room)
-                                elseif exit.edge == 2 or exit.edge == 4 then
-                                    pulp.__fn_goto(x, exit.ty, exit.room)
-                                end
-                            end
-                            break
-                        end
+        local do_exit = false
+            if pulp.listen then
+                -- check for exits
+                -- TODO: only do this if player has moved since previous frame
+                local x = player.x
+                local y = player.y
+                for i = 1,#__exits do
+                    local exit = __exits[i]
+                    if exit.edge == nil then
+                        do_exit = x == exit.x and y == exit.y
+                    elseif exit.edge == 1 then
+                        do_exit = x == exit.x and event_persist.dx > 0
+                    elseif exit.edge == 2 then
+                        do_exit = y == exit.y and event_persist.dy > 0
+                    elseif exit.edge == 3 then
+                        do_exit = x == exit.x and event_persist.dx < 0
+                    elseif exit.edge == 4 then
+                        do_exit = y == exit.y and event_persist.dy < 0
                     end
+                    if do_exit then
+                        if exit.fin then
+                            pulp.__fn_fin(exit.fin)
+                        else
+                            if exit.edge == nil then
+                                pulp.__fn_goto(exit.tx, exit.ty, exit.room)
+                            elseif exit.edge == 1 or exit.edge == 3 then
+                                pulp.__fn_goto(exit.tx, y, exit.room)
+                            elseif exit.edge == 2 or exit.edge == 4 then
+                                pulp.__fn_goto(x, exit.ty, exit.room)
+                            end
+                        end
+                        break
+                    end
+                end
                     
-                    -- move, and check for interactions and collections
+                -- move, and check for interactions and collections
+                if (up_pressed or down_pressed or left_pressed or right_pressed) then
                     if not do_exit then
                         local tx = max(0, min(player.x + event_persist.dx, TILESW-1))
                         local ty = max(0, min(player.y + event_persist.dy, TILESH-1))
@@ -677,11 +727,10 @@ local function readInput()
                             end
                         end
                     end
-                end
-                    
-                if playerScript then
-                    local event = event_persist:new("update");
-                    (playerScript.update or playerScript.any)(playerScript, player, event)
+                    if playerScript then
+                        local event = event_persist:new("update");
+                        (playerScript.update or playerScript.any)(playerScript, player, event)
+                    end
                 end
             end
         end
@@ -706,6 +755,12 @@ function playdate.update()
     
     if pulp.roomQueued then
         pulp:exitRoom()
+        
+        if pulp.roomQueuedX and pulp.roomQueuedY then
+            pulp.player.x = pulp.roomQueuedX
+            pulp.player.y = pulp.roomQueuedY
+        end
+        
         pulp:enterRoom(pulp.roomQueued)
     end
     
@@ -1100,16 +1155,19 @@ function pulp.__fn_wait(self, actor, event, block, duration)
 end
 
 function pulp.__fn_say(x,y,w,h, self, actor, event, block,text)
+    assert(not block or type(block) == "function")
     assert(type(text) == "string")
     x = min(x or 4, TILESW - 1)
     y = min(y or 4, TILESH - 1)
     if w == 0 then w = nil end
     if h == 0 then h = nil end
-    w = w or (TILESW - 9)
+    w = w or (TILESW - 8)
     h = h or 4
     
     w = max(w, 1)
     h = max(h, 1)
+    
+    print(block)
     
     pulp.message = {
         x = x,
@@ -1124,6 +1182,7 @@ function pulp.__fn_say(x,y,w,h, self, actor, event, block,text)
         text = paginate(text or "", w * (pulp.halfwidth and 2 or 1), h),
         options_width = 0, -- text width of largest option
         optselect = 1,
+        firstopt = 1,
         self = self,
         actor = actor,
         event = event,
@@ -1134,6 +1193,7 @@ end
 function pulp.__fn_menu(x,y,w,h,self, actor, event, block)
     x = x or 4
     y = y or 4
+    assert(type(block) == "function")
     
     pulp.message = {
         optx = x,
@@ -1144,6 +1204,7 @@ function pulp.__fn_menu(x,y,w,h,self, actor, event, block)
         clear = pulp.frame == 0,
         previous = pulp.message,
         showoptions = false,
+        firstopt = 1,
         optselect = 1,
         sayAdvanceDelay = config.sayAdvanceDelay,
         self = self,
@@ -1253,12 +1314,8 @@ end
 
 function pulp.__fn_goto(x, y, room)
     local player = pulp.player
-    if x then
-        player.x = x
-    end
-    if y then
-        player.y = y
-    end
+    pulp.roomQueuedX = x
+    pulp.roomQueuedY = y
     if room then
         pulp.roomQueued = room
     end
