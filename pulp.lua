@@ -61,8 +61,14 @@ pulp.optattachmessage = nil
 local pulp_tile_fps_lookup_floor = {}
 local pulp_tile_fps_lookup_floor_lookup = {}
 
--- we scale down the sound to reduce saturation
-local SOUNDSCALE = 0.15
+-- we scale down the sound to reduce saturation and match playback in Firefox
+local SOUNDSCALE = {
+    [0] = 0.15,
+    [1] = 0.15,
+    [2] = 0.15,
+    [3] = 0.15,
+    [4] = 0.15
+}
 
 local EMPTY <const> = {
     any = function (...) end
@@ -891,30 +897,34 @@ function pulp:loadSounds()
             local octave = sound.notes[i+1] + 1
             local pitch = sound.notes[i] + 12 * octave - 1
             local length = sound.notes[i + 2]
-            local step = i -- floor((i+2)/3)
+            local step = floor((i+2)/3)
             if length ~= 0 then
-                track:addNote(step, pitch, length * 3 - 2)
+                track:addNote(step, pitch, length)
             end
         end
         
         local inst = playdate.sound.instrument.new()
         for i = 1,max_polyphony do
             local synth = playdate.sound.synth.new(wavetypes[sound.type])
-            synth:setADSR(
-                sound.attack or 0.005,
-                sound.decay or 0.1,
-                sound.sustain or 0.5,
-                sound.release or 0.1
-            )
+            local envelope = playdate.sound.envelope.new()
+            envelope:setAttack(0)
+            envelope:setDecay(0)
+            envelope:setSustain(sound.sustain or 0.5)
+            envelope:setRelease(sound.release or 0.1)
+            envelope:setRetrigger(1)
+            synth:setAmplitudeMod(envelope)
+            synth:setAttack(sound.attack or 0.005)
+            synth:setDecay(sound.attack or 0.1)
+            synth:setRelease(10 * (sound.release or 1))
             
-            synth:setVolume((sound.volume or 1) * SOUNDSCALE)
+            synth:setVolume((sound.volume or 1) * SOUNDSCALE[sound.type])
             
             inst:addVoice(synth)
         end
         track:setInstrument(inst)
         
         sequence:addTrack(track)
-        sequence:setTempo(sound.bpm / FPS * 3)
+        sequence:setTempo(4 * sound.bpm / 60)
         sound.track = track
         sound.sequence = sequence
     end
