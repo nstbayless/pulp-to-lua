@@ -876,7 +876,7 @@ function playdate.update()
         end
     end
     
-    playdate.drawFPS()
+    --playdate.drawFPS()
     
     pulp.frame += 1
 end
