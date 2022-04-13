@@ -892,7 +892,7 @@ function pulp:loadSounds()
         pulp.sounds_by_name[sound.name] = sound
         local sequence = playdate.sound.sequence.new() 
         local track = playdate.sound.track.new()
-        local max_polyphony = min(8, 1 + ceil(sound.bpm / FPS * (sound.decay or 0.1)))
+        local max_polyphony = min(3, 1 + ceil(sound.bpm / FPS * (sound.decay or 0.1)))
         for i=1,#sound.notes,3 do
             local octave = sound.notes[i+1] + 1
             local pitch = sound.notes[i] + 12 * octave - 1
@@ -915,7 +915,8 @@ function pulp:loadSounds()
             synth:setAmplitudeMod(envelope)
             synth:setAttack(sound.attack or 0.005)
             synth:setDecay(sound.attack or 0.1)
-            synth:setRelease(10 * (sound.release or 1))
+            synth:setSustain(sound.sustain or 0.5)
+            synth:setRelease(10 * (sound.release or 1)) -- really long release time to allow the above envelope to take effect
             
             synth:setVolume((sound.volume or 1) * SOUNDSCALE[sound.type])
             
