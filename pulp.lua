@@ -4,7 +4,7 @@ import "CoreLibs/utilities/sampler"
 
 local pulp <const> = ___pulp
 local floor <const> = math.floor
-local ciel <const> = math.ciel
+local ceil <const> = math.ceil
 local max <const> = math.max
 local min <const> = math.min
 local substr <const> = string.sub
@@ -23,8 +23,10 @@ local __exits = {}
 
 pulp.scripts = {}
 pulp.tiles = pulp.tiles or {}
+pulp.sounds = pulp.sounds or {}
 pulp.tiles_by_name = {}
 pulp.rooms_by_name = {}
+pulp.sounds_by_name = {}
 pulp.roomtiles = {}
 local roomtiles = pulp.roomtiles
 pulp.rooms = pulp.rooms or {}
@@ -55,8 +57,12 @@ pulp.shakey = 2
 pulp.exits = nil
 pulp.message = nil
 pulp.optattachmessage = nil
+
 local pulp_tile_fps_lookup_floor = {}
 local pulp_tile_fps_lookup_floor_lookup = {}
+
+-- we scale down the sound to reduce saturation
+local SOUNDSCALE = 0.15
 
 local EMPTY <const> = {
     any = function (...) end
@@ -120,14 +126,15 @@ for y = 0,TILESH-1 do
     pulp.roomtiles[y] = {}
 end
 
--- music
-local MUSIC_CHANNELS <const> = 5
-local music_synths_sfx <const> = {
-    playdate.sound.synth.new(playdate.sound.kWaveSine),
-    playdate.sound.synth.new(playdate.sound.kWaveSquare),
-    playdate.sound.synth.new(playdate.sound.kWaveSawtooth),
-    playdate.sound.synth.new(playdate.sound.kWaveTriangle),
-    playdate.sound.synth.new(playdate.sound.kWaveTriangle),
+-- sounds
+local SOUND_CHANNELS <const> = 5
+
+local wavetypes <const> = {
+    [0] = playdate.sound.kWaveSine,
+    [1] = playdate.sound.kWaveSquare,
+    [2] = playdate.sound.kWaveSawtooth,
+    [3] = playdate.sound.kWaveTriangle,
+    [4] = playdate.sound.kWaveNoise,
 }
 
 ------------------------------------------------ API ---------------------------------------------------------
@@ -276,6 +283,14 @@ function pulp:getTile(tid)
         return pulp.tiles[tid]
     else
         return pulp.tiles_by_name[tid]
+    end
+end
+
+function pulp:getSound(sid)
+    if type(sid) == "number" then
+        return pulp.sounds[sid]
+    else
+        return pulp.sounds_by_name[sid]
     end
 end
 
@@ -866,13 +881,53 @@ function playdate.update()
     pulp.frame += 1
 end
 
+function pulp:loadSounds()
+    for _, sound in pairs(pulp.sounds) do
+        pulp.sounds_by_name[sound.name] = sound
+        local sequence = playdate.sound.sequence.new() 
+        local track = playdate.sound.track.new()
+        local max_polyphony = min(8, 1 + ceil(sound.bpm / FPS * (sound.decay or 0.1)))
+        for i=1,#sound.notes,3 do
+            local octave = sound.notes[i+1] + 1
+            local pitch = sound.notes[i] + 12 * octave - 1
+            local length = sound.notes[i + 2]
+            local step = i -- floor((i+2)/3)
+            if length ~= 0 then
+                track:addNote(step, pitch, length * 3 - 2)
+            end
+        end
+        
+        local inst = playdate.sound.instrument.new()
+        for i = 1,max_polyphony do
+            local synth = playdate.sound.synth.new(wavetypes[sound.type])
+            synth:setADSR(
+                sound.attack or 0.005,
+                sound.decay or 0.1,
+                sound.sustain or 0.5,
+                sound.release or 0.1
+            )
+            
+            synth:setVolume((sound.volume or 1) * SOUNDSCALE)
+            
+            inst:addVoice(synth)
+        end
+        track:setInstrument(inst)
+        
+        sequence:addTrack(track)
+        sequence:setTempo(sound.bpm / FPS * 3)
+        sound.track = track
+        sound.sequence = sequence
+    end
+end
+
 function pulp:load()
     event_persist.game = pulp.game
     pulp.game.name = pulp.gamename
     pulp.player.script = pulp:getScript(pulp.playerid) or {}
     assert(pulp.player.script)
     pulp.tile_fps_lookup = {}
-    for i, tile in pairs(pulp.tiles) do
+    pulp:loadSounds()
+    for _, tile in pairs(pulp.tiles) do
         pulp.tiles_by_name[tile.name] = tile
         if tile.fps > 0 then
             pulp_tile_fps_lookup_floor_lookup[tile.fps] = pulp_tile_fps_lookup_floor_lookup[tile.fps] or {}
@@ -1055,8 +1110,13 @@ function pulp.__fn_bpm(...)
     -- todo
 end
 
-function pulp.__fn_sound(...)
-    -- todo
+function pulp.__fn_sound(sid)
+    local sound = pulp:getSound(sid)
+    if sound and sound.sequence then
+        sound.sequence:stop()
+        sound.sequence:goToStep(1)
+        sound.sequence:play()
+    end
 end
 
 function pulp.__fn_play(...)
@@ -1228,7 +1288,7 @@ function pulp.__fn_option(self, actor, event, evname, block, text)
     message.options = message.options or {}
     local optwidth = #text
     if pulp.halfwidth then
-        optwidth = ciel(optwidth / 2)
+        optwidth = ceil(optwidth / 2)
     end
     message.options_width = max(message.options_width, optwidth)
     message.options[#message.options + 1] = {

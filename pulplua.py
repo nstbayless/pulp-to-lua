@@ -220,7 +220,7 @@ for sound in pulp["sounds"]:
     if 'notes' in sound:
         code += "  notes = {"
         for note in sound['notes']:
-            code += "{note}, "
+            code += f"{note}, "
         code += "},\n"
     if 'ticks' in sound:
         code += f"  ticks = {sound['ticks']},\n"
