@@ -254,7 +254,7 @@ local function getSong(value)
 		else 
 			songIdent = ' named "'..songName..'"'
 		end
-	else
+	elseif value then
 		local songId = value
 		local song = data.songs[songId+1]
 		if song then
