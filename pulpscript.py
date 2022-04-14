@@ -202,6 +202,33 @@ def remap_special_varname(varname, ctx):
         return "event.room.name"
     elif varname == "event.player":
         return "__pulp.player.name"
+    elif varname == "datetime.year":
+        return "__getTime().year"
+    elif varname == "datetime.year99":
+        return "--[[(year99)]] (__getTime().year % 100)"
+    elif varname == "datetime.month":
+        return "__getTime().month"
+    elif varname == "datetime.day":
+        return "__getTime().day"
+    elif varname == "datetime.weekday":
+        return "(__getTime().weekday - 1)"
+    elif varname == "datetime.day":
+        return "__getTime().day"
+    elif varname == "datetime.hour":
+        return "__getTime().hour"
+    elif varname == "datetime.hour12":
+        return "--[[(hour12)]] ((__getTime().hour % 12) + 1)"
+    elif varname == "datetime.minute":
+        return "__getTime().minute"
+    elif varname == "datetime.second":
+        return "__getTime().second"
+    elif varname == "datetime.millisecond": #note: pulp-to-lua extension
+        return "__getTime().millisecond --[[(PTL-only?)]]"
+    elif varname == "datetime.ampm":
+        return "--[[(ampm)]] (__getTime().hour < 12 and \"am\" or \"pm\")"
+    elif varname == "datetime.AMPM": #note: pulp-to-lua extension
+        return "--[[(AMPM)]] (__getTime().hour < 12 and \"AM\" or \"PM\")  --[[(PTL-only?)]]"
+        
         
     return varname
 

@@ -116,8 +116,6 @@ config = {
     _pulp_to_lua = pulp.tiles[1],
 }
 
--- TODO: datetime
-
 -- TODO: only start if accelerometer is used in this game.
 playdate.startAccelerometer()
 playdate.display.setRefreshRate(FPS)
@@ -1685,8 +1683,8 @@ function pulp.__fn_act()
     end
 end
 
-function pulp.__fn_dump(...)
-    -- todo
+function pulp.__fn_dump()
+    print("dump command not yet implemented in pulp-to-lua.")
 end
 
 function pulp.__fn_crop(x, y, w, h)
