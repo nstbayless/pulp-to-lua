@@ -6,7 +6,7 @@ This transpiler is primarily intended to improve performance.
 
 ## Requirements
 
-You must have [python 3](https://www.python.org/) installed.
+You must have [python 3](https://www.python.org/) installed, and the `PIL` or `Pillow` module as well. `pip install Pillow` on the command line ought to suffice.
 
 ## Usage
 

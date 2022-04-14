@@ -67,12 +67,15 @@ local disabled_exit_y = nil
 local pulp_tile_fps_lookup_floor = {}
 local pulp_tile_fps_lookup_floor_lookup = {}
 
+-- tweak sound engine to work with firefox
+local FIREFOX_SOUND_COMPAT = true
+
 -- we scale down the sound to reduce saturation and match playback in Firefox
 local SOUNDSCALE <const> = {
     [0] = 0.15,
     [1] = 0.15,
     [2] = 0.15,
-    [3] = 0.15,
+    [3] = 0.22,
     [4] = 0.10
 }
 pulp.soundscale = SOUNDSCALE
@@ -464,7 +467,7 @@ local function updateMessage(up, down, left, right, confirm, cancel)
     if not message.showoptions and not message.text then
         if message.block then
             pulp.optattachmessage = message
-            message.block(message.script, message.actor, message.event)
+            message.block(message.self, message.script, message.actor, message.event)
             pulp.optattachmessage = nil
             message.showoptions = true
             message.optselect = 1
@@ -558,7 +561,7 @@ local function updateMessage(up, down, left, right, confirm, cancel)
             -- close the final page.
             if message.block then
                 pulp.optattachmessage = message
-                message.block(message.script, message.actor, message.event)
+                message.block(message.self, message.script, message.actor, message.event)
                 pulp.optattachmessage = nil
                 message.block = nil
             end
@@ -1065,44 +1068,65 @@ end
 function pulp:loadSounds()
     for _, sound in pairs(pulp.sounds) do
         pulp.sounds_by_name[sound.name] = sound
+        sound.attack = sound.attack or 0.005
+        sound.decay = sound.decay or 0.1
+        sound.sustain = sound.sustain or 0.5
+        sound.release = sound.release or 0.1
+        sound.volume = sound.volume or 1
         local sequence = playdate.sound.sequence.new() 
-        local track = playdate.sound.track.new()
-        local max_polyphony = min(3, 1 + ceil(sound.bpm * SPF * (sound.decay or 0.1)))
-        for i=1,#sound.notes,3 do
-            local octave = sound.notes[i+1] + 1
-            local pitch = sound.notes[i] + 12 * octave - 1
-            local length = sound.notes[i + 2]
-            local step = floor((i+2)/3)
-            if length ~= 0 then
-                track:addNote(step, pitch, length)
+        
+        local steps_per_second = 4 * sound.bpm / 60
+        local final = FIREFOX_SOUND_COMPAT and (1 + ceil((sound.attack + sound.decay) * steps_per_second)) or 1 
+        local max_polyphony = 3
+        for j=1,final do 
+            local any_notes = false
+            local track = playdate.sound.track.new()
+            
+            local scale_factor = 1
+            if FIREFOX_SOUND_COMPAT and j < final then
+                local max_time = j / steps_per_second
+                local destime = (sound.attack + sound.decay)
+                scale_factor = min(max_time/destime, 1)
+                
+                if sound.name == "move" then
+                    print(j, "scale factor", scale_factor)
+                end
+            end
+            
+            local inst = playdate.sound.instrument.new()
+            for i = 1,max_polyphony do
+                local synth = playdate.sound.synth.new(wavetypes[sound.type])
+                synth:setAttack(sound.attack * scale_factor)
+                synth:setDecay(sound.decay * scale_factor)
+                -- it doesn't really make sense that sustain is scaled by scale_factor, but firefox does this.
+                synth:setSustain(sound.sustain * scale_factor)
+                synth:setRelease(sound.release)
+                
+                synth:setVolume(sound.volume * SOUNDSCALE[sound.type])
+                
+                inst:addVoice(synth)
+            end
+            track:setInstrument(inst)
+            local max_polyphony = min(3, 1 + ceil(sound.bpm * SPF * (sound.decay or 0.1)))
+            for i=1,#sound.notes,3 do
+                local octave = sound.notes[i+1] + 1
+                local pitch = sound.notes[i] + 12 * octave - 1
+                local length = sound.notes[i + 2]
+                local step = floor((i+2)/3)
+                if length ~= 0 then
+                    if length == j or (length >= j and j == final) then
+                        track:addNote(step, pitch, length)
+                        any_notes = true
+                    end
+                end
+            end
+        
+            if any_notes then
+                sequence:addTrack(track)
             end
         end
-        
-        local inst = playdate.sound.instrument.new()
-        for i = 1,max_polyphony do
-            local synth = playdate.sound.synth.new(wavetypes[sound.type])
-            local envelope = playdate.sound.envelope.new()
-            envelope:setAttack(0)
-            envelope:setDecay(0)
-            envelope:setSustain(sound.sustain or 0.5)
-            envelope:setRelease(sound.release or 0.1)
-            envelope:setRetrigger(1)
-            synth:setAmplitudeMod(envelope)
-            synth:setAttack(sound.attack or 0.005)
-            synth:setDecay(sound.attack or 0.1)
-            synth:setSustain(sound.sustain or 0.5)
-            synth:setRelease(10 * (sound.release or 1)) -- really long release time to allow the above envelope to take effect
-            
-            synth:setVolume((sound.volume or 1) * SOUNDSCALE[sound.type])
-            
-            inst:addVoice(synth)
-        end
-        track:setInstrument(inst)
-        
-        sequence:addTrack(track)
-        
-        -- multiply by 4 because there are 4 steps in a beat? maybe?
-        sequence:setTempo(4 * sound.bpm / 60)
+
+        sequence:setTempo(steps_per_second)
         sound.track = track
         sound.sequence = sequence
     end
