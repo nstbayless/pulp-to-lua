@@ -3,11 +3,11 @@ assert(___pulp, "___pulp object must be defined before import")
 -- scale audio by this amount
 -- (we need to declare this before importing pulp-audio)
 SOUNDSCALE = {
-    [0] = 0.16, -- sine
-    [1] = 0.28, -- square
-    [2] = 0.15, -- sawtooth
-    [3] = 0.22, -- triangle
-    [4] = 0.08  -- noise
+    [0] = 0.160, -- sine
+    [1] = 0.206, -- square
+    [2] = 0.150, -- sawtooth
+    [3] = 0.220, -- triangle
+    [4] = 0.080  -- noise
 }
 
 import "CoreLibs/utilities/sampler"
