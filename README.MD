@@ -34,6 +34,7 @@ While `pulp-to-lua` should already significantly improve performance by an order
 ## Incompatabilities
 
 - The transpilation is likely not perfect. Some behaviour may differ. You can help by reporting behaviourial differences.
+- Audio in particular may sound warped. There are a number of reasons for this. You can try changing `FIREFOX_SOUND_COMPAT` to false in `main.lua` after exporting, or modifying the `SOUNDSCALE` table in `pulp.lua`. This is an ongoing field of research, and you're welcome to contribute!
 
 ## Contributions
 

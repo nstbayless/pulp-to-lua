@@ -1,7 +1,8 @@
-from cmath import exp
-from re import S
+# This file contains the logic for transpiling actual pulpscript code.
+# It's more complicated than transpiling the assets, so it gets its own file
+# to keep it self-contained.
 
-RELASSIGN = True
+RELASSIGN = True # allow relative assignment in lua, e.g. `x += 1`
 
 class PulpScriptContext:
     def __init__(self):

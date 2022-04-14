@@ -34,7 +34,11 @@ ROOMH = 15
 ctx = PulpScriptContext()
 
 def startcode():
-    code = "___pulp = {\n" \
+    code = """-- tweak sound engine to sound as it does on firefox.
+-- set this to false to make the sound engine sound as it does on pdx export.
+local FIREFOX_SOUND_COMPAT = true
+"""
+    code += "___pulp = {\n" \
         + f"  playerid = {playerid},\n" \
         + f"  startroom = {startroom},\n" \
         + f"  startx = {pulp['player']['x']},\n" \
@@ -249,9 +253,49 @@ for sound in pulp["sounds"]:
         if 'sustain' in sound['envelope']:
             code += f"  sustain = {sound['envelope']['sustain']},\n"
     code += "}\n"
-    
-code += "\n__pulp.songs = {}\n"
 
+#songs    
+code += "\n__pulp.songs = {}\n"
+for song in pulp["songs"]:
+    code += f"__pulp.songs[#__pulp.songs + 1] = " + "{\n"
+    code += f"  bpm = {song['bpm']},\n"
+    code += f"  id = {song['id']},\n"
+    code += f"  name = \"{song['name']}\",\n"
+    code += f"  ticks = {song['ticks']},\n"
+    code += "  notes = {\n"
+    for track in song["notes"]:
+        code += "    {"
+        i = 0
+        for note in track:
+            code += f"{note}, "
+            if i % 100 == 99:
+                code += "\n"
+            i += 1
+        code += "},\n"
+    code += "  },\n"
+    code += "  voices = {\n"
+    for voice in song['voices']:
+        if voice:
+            code += "    {\n"
+            if 'attack' in voice:
+                code += f"       attack = {voice['attack']},\n"
+            if 'decay' in voice:
+                code += f"       decay = {voice['decay']},\n"
+            if 'volume' in voice:
+                code += f"       volume = {voice['volume']},\n"
+            if 'release' in voice:
+                code += f"       {voice['release']},\n"
+            if 'sustain' in voice:
+                code += f"       {voice['sustain']},\n"
+            code += "    },"
+        else:
+            code += "    {},\n"
+    code += "  },\n"
+    if "loopFrom" in song:
+        code += f"  loopFrom = {song['loopFrom']}\n,"
+    code += "}\n"
+
+#scripts
 for pulpscript in pulp["scripts"]:
     script = Script(pulpscript["id"], pulpscript["type"])
     if "data" in pulpscript:
@@ -337,6 +381,7 @@ if not os.path.isdir(outpath):
 with open(os.path.join(outpath, "main.lua"), "w") as f:
     f.write(code)
 shutil.copy("pulp.lua", outpath)
+shutil.copy("pulp-audio.lua", outpath)
 frame_img.save(os.path.join(outpath, "tiles-table-8-8.png"))
 borderimage.save(os.path.join(outpath, "pipe-table-8-8.png"))
 fontimage.save(os.path.join(outpath, "font-table-8-8.png"))

@@ -1,6 +1,17 @@
 assert(___pulp, "___pulp object must be defined before import")
 
+-- scale audio by this amount
+-- (we need to declare this before importing pulp-audio)
+SOUNDSCALE = {
+    [0] = 0.16, -- sine
+    [1] = 0.18, -- square
+    [2] = 0.15, -- sawtooth
+    [3] = 0.22, -- triangle
+    [4] = 0.08  -- noise
+}
+
 import "CoreLibs/utilities/sampler"
+import "pulp-audio.lua"
 
 local pulp <const> = ___pulp
 local floor <const> = math.floor
@@ -27,6 +38,7 @@ pulp.sounds = pulp.sounds or {}
 pulp.tiles_by_name = {}
 pulp.rooms_by_name = {}
 pulp.sounds_by_name = {}
+pulp.song_names_by_id = {}
 pulp.roomtiles = {}
 pulp.store = {}
 pulp.store_dirty = false
@@ -67,17 +79,7 @@ local disabled_exit_y = nil
 local pulp_tile_fps_lookup_floor = {}
 local pulp_tile_fps_lookup_floor_lookup = {}
 
--- tweak sound engine to work with firefox
-local FIREFOX_SOUND_COMPAT = true
-
 -- we scale down the sound to reduce saturation and match playback in Firefox
-local SOUNDSCALE <const> = {
-    [0] = 0.15,
-    [1] = 0.15,
-    [2] = 0.15,
-    [3] = 0.22,
-    [4] = 0.10
-}
 pulp.soundscale = SOUNDSCALE
 
 local EMPTY <const> = {
@@ -353,6 +355,14 @@ function pulp:getTile(tid)
         return pulp.tiles[tid]
     else
         return pulp.tiles_by_name[tid]
+    end
+end
+
+function pulp:getSongName(sid)
+    if type(sid) == "number" then
+        return pulp.song_names_by_id[sid]
+    else
+        return sid
     end
 end
 
@@ -848,12 +858,15 @@ function playdate.update()
     end
     
     if pulp.restart then
+        __pulp_audio.killCallbacks()
         pulp:savestore()
         pulp.resetvars()
         
         pulp:start()
         return
     end
+    
+    __pulp_audio.update()
     
     if pulp.roomQueued then
         pulp:exitRoom()
@@ -1066,6 +1079,13 @@ function playdate.update()
 end
 
 function pulp:loadSounds()
+    -- we outsource music to pulp-audio
+    __pulp_audio.init(pulp.songs)
+    for _, song in pairs(pulp.songs) do
+        pulp.song_names_by_id[song.id] = song.name
+    end
+    
+    -- we handle sounds ourself
     for _, sound in pairs(pulp.sounds) do
         pulp.sounds_by_name[sound.name] = sound
         sound.attack = sound.attack or 0.005
@@ -1351,20 +1371,29 @@ end
 
 ------- IMPERATIVE FUNCTIONS --------------------------------------------------
 
-function pulp.__fn_stop(...)
-    -- todo
+function pulp.__fn_stop()
+    __pulp_audio.stopSong()
 end
 
-function pulp.__fn_once(...)
-    -- todo
+function pulp.__fn_once(self, actor, event, evname, block, song)
+    __pulp_audio.playSong(
+        pulp:getSongName(song),
+        true,
+        block and function()
+            block(self, actor, event, evname)
+        end
+    )
 end
 
-function pulp.__fn_loop(...)
-    -- todo
+function pulp.__fn_loop(song)
+    __pulp_audio.playSong(
+        pulp:getSongName(song),
+        false
+    )
 end
 
-function pulp.__fn_bpm(...)
-    -- todo
+function pulp.__fn_bpm(bpm)
+    __pulp_audio.setBpm(bpm)
 end
 
 function pulp.__fn_sound(sid)
@@ -1462,11 +1491,9 @@ function pulp.__fn_restore(name)
         end
     else
         assert(type(name) == "string")
-        if pulp.store[name] then
-            local v = pulp.store[_name]
-            if type(v) ~= "table" then
-                pulp.setvariable(name, v)
-            end
+        local v = pulp.store[name]
+        if v and type(v) ~= "table" then
+            pulp.setvariable(name, v)
         end
     end
 end
