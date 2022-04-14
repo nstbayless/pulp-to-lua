@@ -72,6 +72,7 @@ local FIREFOX_SOUND_COMPAT = true
     code += "local __print <const> = print\n"
     code += "local __getTime <const> = playdate.getTime\n"
     code += "local __getSecondsSinceEpoch <const> = playdate.getSecondsSinceEpoch\n"
+    code += "math.randomseed(__getSecondsSinceEpoch())\n"
     code += """local __fillrect <const> = playdate.graphics.fillRect
 local __setcolour <const> = playdate.graphics.setColor
 local __fillcolours <const> = {
