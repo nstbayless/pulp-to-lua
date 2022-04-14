@@ -302,24 +302,25 @@ for song in pulp["songs"]:
             i += 1
         code += "},\n"
     code += "  },\n"
-    code += "  voices = {\n"
-    for voice in song['voices']:
-        if voice:
-            code += "    {\n"
-            if 'attack' in voice:
-                code += f"       attack = {voice['attack']},\n"
-            if 'decay' in voice:
-                code += f"       decay = {voice['decay']},\n"
-            if 'volume' in voice:
-                code += f"       volume = {voice['volume']},\n"
-            if 'release' in voice:
-                code += f"       {voice['release']},\n"
-            if 'sustain' in voice:
-                code += f"       {voice['sustain']},\n"
-            code += "    },"
-        else:
-            code += "    {},\n"
-    code += "  },\n"
+    if 'voices' in song:
+        code += "  voices = {\n"
+        for voice in song['voices']:
+            if voice:
+                code += "    {\n"
+                if 'attack' in voice:
+                    code += f"       attack = {voice['attack']},\n"
+                if 'decay' in voice:
+                    code += f"       decay = {voice['decay']},\n"
+                if 'volume' in voice:
+                    code += f"       volume = {voice['volume']},\n"
+                if 'release' in voice:
+                    code += f"       {voice['release']},\n"
+                if 'sustain' in voice:
+                    code += f"       {voice['sustain']},\n"
+                code += "    },"
+            else:
+                code += "    {},\n"
+        code += "  },\n"
     if "loopFrom" in song:
         code += f"  loopFrom = {song['loopFrom']}\n,"
     code += "}\n"
