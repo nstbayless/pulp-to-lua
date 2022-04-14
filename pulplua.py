@@ -341,3 +341,23 @@ frame_img.save(os.path.join(outpath, "tiles-table-8-8.png"))
 borderimage.save(os.path.join(outpath, "pipe-table-8-8.png"))
 fontimage.save(os.path.join(outpath, "font-table-8-8.png"))
 print(f"files written to {outpath}")
+
+# Generate pdxinfo file:
+# create path for launcher assets
+launcher_path = "launcher/"
+if not os.path.isdir(outpath + launcher_path):
+    os.mkdir(outpath + launcher_path)
+
+# create pdxinfo file
+with open(os.path.join(outpath, "pdxinfo"), "w") as f:
+    f.write("name=" + pulp["name"] + str('\n'))
+    f.write("author=" + pulp["author"] + str('\n'))
+    f.write("description=" + pulp["intro"] + str('\n'))
+    f.write("bundleID=" + "game.pulp." + pulp["name"] + str('\n'))
+    f.write("version=" + str(pulp["version"]) + str('\n'))
+    f.write("buildNumber=123\n")
+    f.write("imagePath=" + launcher_path + "\n")
+    f.write("launchSoundPath=" + launcher_path + "\n")
+print(f"pdxinfo saved to {outpath}")
+
+print("build complete")
