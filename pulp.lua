@@ -1875,6 +1875,10 @@ end
 -- TODO: inline this
 function pulp.__ex_solid(x, y, id)
     if x and y then
+        if x < 0 or x >= TILESW or y < 0 or y >= TILESH then
+            -- edge case
+            return 1
+        end
         local tilei = pulp.roomtiles[y][x]
         return (tilei and tilei.solid) and 1 or 0
     else

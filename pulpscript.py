@@ -467,6 +467,8 @@ def transpile_command(cmd, ctx):
     
     if op == "_":
         return "" # ctx.gi() + "\n"
+    elif op == "done":
+        return ctx.gi() + "do return end\n"
     elif op == "set":
         return ctx.gi() + op_set(cmd, "", ctx) + "\n"
     elif op == "add":
