@@ -11,7 +11,23 @@ class PulpScriptContext:
         self.var_usage = {}
         self.full_mimics = []
         
+        # cache these at the start of each function
+        self.funccache = []
+        
+    def push_funccache(self):
+        self.funccache.append(set())
+    
+    def pop_funccache(self):
+        self.funccache = self.funccache[:-1]
+    
+    def get_funccache(self):
+        return self.funccache[-1]
+        
     def pingvar(self, varname):
+        if "." in varname:
+            # ignore these.
+            return varname
+        
         self.vars.add(varname)
         self.var_usage[varname] = self.var_usage.get(varname, 0) + 1
         if varname.startswith("__"):
@@ -65,6 +81,7 @@ funclist = [
     "dump",
     "wait",
     "window",
+    "crop",
 ]
 
 exfuncs = [
@@ -90,6 +107,10 @@ inlinefuncs = {
     "__fn_frame": "{0}.frame = {1}",
     "__fn_inc": "{0} += 1",
     "__fn_dec": "{0} -= 1",
+    "__fn_log": "__print({0})",
+    # OPTIMIZE: we can hardcode in __pix8scale to improve performance. __pix8scale is usually 1!
+    # OPTIMIZE: we can probably perform the color string lookup at compile-time in most cases
+    "__fn_fill": "__fillrect({0} * __pix8scale, {1} * __pix8scale, {2} * __pix8scale, {3} * __pix8scale, __fillcolours[{4}])",
     "__ex_frame": "({0}.frame or 0)",
     "__ex_invert": "(__pulp.invert and 1 or 0)",
     "__ex_degrees": "({0} * 360 / __tau)",
@@ -105,13 +126,15 @@ funcargs = {
     "swap": ["actor"],
     "label": ["x", "y", "len", "lines"],
     "draw": ["x", "y"],
-    "wait": ["self", "actor", "event", "evname", "block"],
     "solid": ["x", "y"],
-    "say": ["x", "y", "w", "h", "self", "actor", "event", "evname" "block"],
+    "wait": ["self", "actor", "event", "evname", "block"],
+    "say": ["x", "y", "w", "h", "self", "actor", "event", "evname", "block"],
     "ask": ["x", "y", "w", "h", "self", "actor", "event", "evname", "block"],
     "menu": ["x", "y", "w", "h", "self", "actor", "event", "evname", "block"],
     "option": ["self", "actor", "event", "evname", "block"],
     "window": ["x", "y", "w", "h"],
+    "fill": ["x", "y", "w", "h"],
+    "crop": ["x", "y", "w", "h"]
 }
 
 staticfuncs = {
@@ -122,7 +145,7 @@ staticfuncs = {
     "cosine": "__cos",
     "sine": "__sin",
     "tangent": "__tan",
-    "random": "__random"
+    "random": "__random",
 }
 
 # adds backslashes
@@ -155,8 +178,27 @@ def optimize_name_ref(cmd, idx):
     return False
 
 def ex_get(expression, ctx):
-    expression[1] = ctx.pingvar(expression[1])
-    return expression[1]
+    varname = ctx.pingvar(expression[1])
+    
+    # these require special caching behaviour per-function
+    # note that they cannot be set (op_set), so we don't need to consider them there.
+    if varname == "event.px":
+        ctx.get_funccache().add("local __event_px = __pulp.player.x")
+        return "__event_px"
+    elif varname == "event.py":
+        ctx.get_funccache().add("local __event_py = __pulp.player.y")
+        return "__event_py"
+    elif varname == "event.x":
+        ctx.get_funccache().add("local __event_x = __actor.x or 0")
+        return "__event_x"
+    elif varname == "event.y":
+        ctx.get_funccache().add("local __event_y = __actor.y or 0")
+        return "__event_y"
+    elif varname == "event.tile":
+        ctx.get_funccache().add("local __event_tile = __actor.name or 0")
+        return "__event_tile"
+        
+    return varname
     
 def ex_format(expression, ctx):
     s = ""
@@ -397,7 +439,7 @@ def transpile_command(cmd, ctx):
         return ctx.gi() + op_set(cmd, "*", ctx) + "\n"
     elif op == "inc":
         return ctx.gi() + op_inc(cmd, "+=1", ctx) + "\n"
-    elif op == "inc":
+    elif op == "dec":
         return ctx.gi() + op_inc(cmd, "-=1", ctx) + "\n"
     elif op == "if":
         return ctx.gi() + op_block(cmd, "if", "then", "end", ctx) + "\n"
@@ -416,16 +458,22 @@ def transpile_command(cmd, ctx):
     elif op == "#":
         return f"{ctx.gi()}--(comment omitted)\n"
     elif op == "#$":
-        return f"{ctx.gi()}--[[(multiline comment omitted)]]\n"
+        return f"{ctx.gi()}--(previous-line comment omitted)\n"
     else:
         ctx.errors += ["unknown command code: " + op]
         return ctx.gi() + f"--unknown command code '{op}'\n"
 
-def transpile_commands(commands, ctx):
+def transpile_commands(commands, ctx, has_funccache=False):
+    if has_funccache:
+        ctx.push_funccache()
     s = ""
     for command in commands:
         if type(command) == list:
             s += transpile_command(command, ctx)
+    if has_funccache:
+        for cached in sorted(list(ctx.get_funccache())):
+            s = ctx.gi() + cached + "\n" + s
+        ctx.pop_funccache()
     return s
         
 def transpile_event(evobj, evname, ctx, blockidx):
@@ -436,7 +484,10 @@ def transpile_event(evobj, evname, ctx, blockidx):
         s = f"{_evobj}[\"{evname}\"] = function(__self, __actor, event, __evname)\n"
     
     block = ctx.blocks[blockidx]
-    s += transpile_commands(ctx.blocks[blockidx], ctx)
+    
+    cmdstr = transpile_commands(ctx.blocks[blockidx], ctx, True)
+    
+    s += cmdstr
     s += "end\n"
     
     #optimization for one-line-only mimics

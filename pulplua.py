@@ -57,6 +57,14 @@ def startcode():
     code += "local __tau <const> = math.pi * 2\n"
     code += "local __tostring <const> = tostring\n"
     code += "local __roomtiles <const> = __pulp.roomtiles\n"
+    code += "local __print <const> = print\n"
+    code += """local __fillrect <const> = playdate.graphics.fillRect
+    local __fillcolours <const> = {
+        black = playdate.graphics.kColorBlack,
+        white = playdate.graphics.kColorWhite
+    }
+    local __pix8scale = __pulp.pix8scale
+    """
     return code
     
 def endcode():

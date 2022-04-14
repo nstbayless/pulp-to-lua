@@ -39,9 +39,10 @@ pulp.game = {
     end
 }
 pulp.player = {
+    is_player = true,
     frame = 0,
     x = 0,
-    y = 0,
+    y = 0
 }
 pulp.invert = false
 pulp.listen = true
@@ -50,6 +51,7 @@ pulp.hideplayer = false -- (resets to false every frame.)
 pulp.roomQueued = nil
 pulp.frame = 0
 pulp.tilemap = playdate.graphics.tilemap.new()
+local tilemap <const> = pulp.tilemap
 pulp.game_is_loaded = false
 pulp.timers = {}
 pulp.shakex = 2
@@ -57,18 +59,21 @@ pulp.shakey = 2
 pulp.exits = nil
 pulp.message = nil
 pulp.optattachmessage = nil
+local disabled_exit_x = nil
+local disabled_exit_y = nil
 
 local pulp_tile_fps_lookup_floor = {}
 local pulp_tile_fps_lookup_floor_lookup = {}
 
 -- we scale down the sound to reduce saturation and match playback in Firefox
-local SOUNDSCALE = {
+local SOUNDSCALE <const> = {
     [0] = 0.15,
     [1] = 0.15,
     [2] = 0.15,
     [3] = 0.15,
-    [4] = 0.15
+    [4] = 0.10
 }
+pulp.soundscale = SOUNDSCALE
 
 local EMPTY <const> = {
     any = function (...) end
@@ -97,9 +102,10 @@ config = {
     follow = 0,
     followCenterX=12,
     followCenterY=7,
-    followOverflowTile = "black",
+    followOverflowTile = 1,
     allowDismissRootMenu = 0,
     sayAdvanceDelay = 0.2,
+    _pulp_to_lua = pulp.tiles[1],
 }
 
 -- TODO: datetime
@@ -110,24 +116,42 @@ playdate.display.setRefreshRate(FPS)
 
 local tile_img = pulp.tile_img
 local font_img = pulp.font_img
-local GRIDX, GRIDY = pulp.tile_img[1]:getSize()
+local GRIDX <const>, GRIDY <const> = pulp.tile_img[1]:getSize()
 if GRIDX == 8 then
     playdate.display.setScale(2)
 end
 if GRIDX == 4 then
     playdate.display.setScale(4)
 end
+if GRIDX == 2 then
+    playdate.display.setScale(8)
+end
+if GRIDX == 1 then
+    playdate.display.setScale(16)
+end
+
+local PIX8SCALE <const> = GRIDX / 8
+pulp.gridx = GRIDX
+pulp.gridy = GRIDY
+pulp.pix8scale = PIX8SCALE
+
 local HALFWIDTH_SRCRECT = nil
 if pulp.halfwidth then
     HALFWIDTH_SRCRECT = playdate.geometry.rect.new(0, 0, GRIDX/2, GRIDY)
 end
+
 playdate.graphics.setBackgroundColor(playdate.graphics.kColorBlack)
 
-local TILESW = 25
-local TILESH = 15
+local TILESW <const> = 25
+local TILESH <const> = 15
+local cropl = 0
+local cropr = TILESW-1
+local cropu = 0
+local cropd = TILESH-1
+local iscropped = false
 
-pulp.tilemap:setImageTable(pulp.tile_img)
-pulp.tilemap:setSize(TILESW, TILESH)
+tilemap:setImageTable(tile_img)
+tilemap:setSize(TILESW, TILESH)
 for y = 0,TILESH-1 do
     pulp.roomtiles[y] = {}
 end
@@ -205,6 +229,12 @@ local function paginate(text, w, h)
         pages[#pages] = nil
     end
     
+    -- strip lines on each page after the fact
+    -- FIXME: should strip above for correct behaviour
+    for i = 1,#pages do
+        pages[i] = string.gsub(pages[i], " *\n *", "\n")
+    end
+    
     return pages
 end
 
@@ -228,9 +258,14 @@ function event_persist:new()
         az = self.az,
         dx = self.dx,
         dy = self.dy,
+        tx = self.tx,
+        ty = self.ty,
+        px = pulp.player.x,
+        py = pulp.player.y,
         game = pulp.game,
         room = self.room,
         orientation = self.orientation,
+        frame = pulp.frame
     }
 end
 
@@ -534,7 +569,7 @@ local function drawMessage(message, submenu)
         end
         
         if message.text then
-            pulp.__fn_window(message.x-1, message.y-1, message.w+1, message.h+1)
+            pulp.__fn_window(message.x-1, message.y-1, message.w+2, message.h+2)
             
             local text = substr(message.text[message.page], 1, message.textidx)
             pulp.__fn_label(message.x, message.y, nil, nil, text)
@@ -557,7 +592,7 @@ local function drawMessage(message, submenu)
         local optx = message.optx or message.x + message.w - 1 - optw
         local opty = message.opty or message.y + message.h
         
-        pulp.__fn_window(optx - 2, opty - 1, optw + 2, opth + 1)
+        pulp.__fn_window(optx - 2, opty - 1, optw + 3, opth + 2)
         
         local y = 0
         for i = message.firstopt,#message.options do
@@ -669,6 +704,8 @@ local function readInput()
     if pulp.message then
         updateMessage(up_pressed, down_pressed, left_pressed, right_pressed, a_pressed, b_pressed)
     else
+        local player = pulp.player
+        
         if up_pressed or down_pressed or left_pressed or right_pressed then
             event_persist.dx = 0
             event_persist.dy = 0
@@ -682,9 +719,13 @@ local function readInput()
                 event_persist.dx = 1
             end
         end
+        
+        local tx = max(0, min(player.x + event_persist.dx, TILESW-1))
+        local ty = max(0, min(player.y + event_persist.dy, TILESH-1))
+        event_persist.tx = tx
+        event_persist.ty = ty
     
         local playerScript = pulp:getPlayerScript()
-        local player = pulp.player
         if pulp.listen then 
             if a_pressed and playerScript then
                 (playerScript.confirm or playerScript.any)(playerScript, pulp.player, event_persist:new(), "confirm")
@@ -693,15 +734,19 @@ local function readInput()
                 (playerScript.cancel or playerScript.any)(playerScript, pulp.player, event_persist:new(), "cancel")
             end
                 
-        local do_exit = false
+            local do_exit = false
             if pulp.listen then
                 -- check for exits
                 -- TODO: only do this if player has moved since previous frame
                 local x = player.x
                 local y = player.y
+                if x ~= disabled_exit_x or y ~= disabled_exit_y then
+                    disabled_exit_x = nil
+                    disabled_exit_y = nil
+                end
                 for i = 1,#__exits do
                     local exit = __exits[i]
-                    if exit.edge == nil then
+                    if exit.edge == nil and (x ~= disabled_exit_x or y ~= disabled_exit_y) then
                         do_exit = x == exit.x and y == exit.y
                     elseif exit.edge == 1 then
                         do_exit = x == exit.x and event_persist.dx > 0
@@ -709,7 +754,7 @@ local function readInput()
                         do_exit = y == exit.y and event_persist.dy > 0
                     elseif exit.edge == 3 then
                         do_exit = x == exit.x and event_persist.dx < 0
-                    elseif exit.edge == 4 then
+                    elseif exit.edge == 0 or exit.edge == 4 then
                         do_exit = y == exit.y and event_persist.dy < 0
                     end
                     if do_exit then
@@ -720,7 +765,7 @@ local function readInput()
                                 pulp.__fn_goto(exit.tx, exit.ty, exit.room)
                             elseif exit.edge == 1 or exit.edge == 3 then
                                 pulp.__fn_goto(exit.tx, y, exit.room)
-                            elseif exit.edge == 2 or exit.edge == 4 then
+                            elseif exit.edge == 2 or exit.edge == 4 or exit.edge == 0 then
                                 pulp.__fn_goto(x, exit.ty, exit.room)
                             end
                         end
@@ -731,11 +776,9 @@ local function readInput()
                 -- move, and check for interactions and collections
                 if (up_pressed or down_pressed or left_pressed or right_pressed) then
                     if not do_exit then
-                        local tx = max(0, min(player.x + event_persist.dx, TILESW-1))
-                        local ty = max(0, min(player.y + event_persist.dy, TILESH-1))
-                        
                             local ttile = roomtiles[ty][tx]
                             if ttile then -- paranoia
+                            
                             if not ttile.solid then
                                 player.x = tx
                                 player.y = ty
@@ -748,9 +791,9 @@ local function readInput()
                             local _type = ttile.ttype
                             local _script = ttile.script or {}
                             if _type == TTYPE_SPRITE and config.autoAct then
-                                (_script.interact or _script.any or default_event_interact)(ttile.script, ttile, event_persist:new(), interact)
+                                (_script.interact or _script.any or default_event_interact)(ttile.script, ttile, event_persist:new(), "interact")
                             elseif _type == TTYPE_ITEM then
-                                (_script.collect or _script.any or default_event_collect)(ttile.script, ttile, event_persist:new(), collect)
+                                (_script.collect or _script.any or default_event_collect)(ttile.script, ttile, event_persist:new(), "collect")
                             end
                         end
                     end
@@ -820,22 +863,82 @@ function playdate.update()
         end
     end
     
+    local scrolly = 0
+    local scrollx = 0
+    local scroll = false
+    
+    if config.follow ~= 0 then
+        scrollx = config.followCenterX - pulp.player.x
+        scrolly = config.followCenterY - pulp.player.y
+        if scrolly == 0 and scrollx == 0 then
+            scroll = false
+        else
+            scroll = true
+        end
+    end
+    
     -- update tile frames and draw tiles
-    for x = 0,TILESW-1 do
-        for y = 0,TILESH-1 do
-            local tilei = roomtiles[y][x]
-            
-            if tilei.fps > 0 then
-                tilei.frame = pulp_tile_fps_lookup_floor[tilei.fps_lookup_idx]
-            else
-                tilei.frame = floor(tilei.frame)
+    -- WARNING: DUPLICATE CODE! Yes, yes, but it's efficient, and this loop is hot.
+    if scroll then
+        for x = cropl,cropr do
+            for y = cropu,cropd do
+                if y - scrolly >= TILESH or y - scrolly < 0 or x - scrollx >= TILESW or x - scrollx < 0 then
+                    -- skip this one
+                else
+                    local tilei = roomtiles[y - scrolly][x - scrollx]
+                    local dsttilei = roomtiles[y][x]
+                    local frames = tilei.tile.frames
+                    if tilei.fps > 0 then
+                        tilei.frame = pulp_tile_fps_lookup_floor[tilei.fps_lookup_idx]
+                    elseif tilei.frame >= #frames then
+                        tilei.frame = 0
+                    end
+                    
+                    -- checks if changed
+                    local frame = frames[tilei.frame + 1] or 1
+                    if dsttilei.prev_frame ~= frame then
+                        dsttilei.prev_frame = frame
+                        tilemap:setTileAtPosition(x+1, y+1, frame)
+                    end
+                end
             end
-            
-            -- checks if changed
-            local frame = tilei.tile.frames[tilei.frame + 1]
-            if tilei.prev_frame ~= frame then
-                tilei.prev_frame = frame
-                pulp.tilemap:setTileAtPosition(x+1, y+1, frame)
+        end
+    else
+        -- no scrolling
+        for x = cropl,cropr do
+            for y = cropu,cropd do
+                local tilei = roomtiles[y][x]
+                local frames = tilei.tile.frames
+                if tilei.fps > 0 then
+                    tilei.frame = pulp_tile_fps_lookup_floor[tilei.fps_lookup_idx]
+                elseif tilei.frame >= #frames then
+                    tilei.frame = 0
+                end
+                
+                -- checks if changed
+                local frame = frames[tilei.frame + 1] or 1
+                if tilei.prev_frame ~= frame then
+                    tilei.prev_frame = frame
+                    tilemap:setTileAtPosition(x+1, y+1, frame)
+                end
+            end
+        end
+    end
+        
+    if iscropped or scroll then
+        -- draw cropping borders
+        -- FIXME: more efficient implementation of this.
+        local overflowtile = pulp:getTile(config.followOverflowTile) or {frames={1}}
+        local frame = overflowtile.frames[1] or 1
+        for x=0,TILESW-1 do
+            for y=0,TILESH-1 do
+                if x < cropl or x > cropr or y < cropu or y > cropd then
+                    tilemap:setTileAtPosition(x+1,y+1, frame)
+                    roomtiles[y][x].prev_frame = frame
+                elseif scroll and (x - scrollx < 0 or x - scrollx >= TILESW or y - scrolly < 0 or y - scrolly >= TILESH) then
+                    tilemap:setTileAtPosition(x+1,y+1, frame)
+                    roomtiles[y][x].prev_frame = frame
+                end
             end
         end
     end
@@ -847,7 +950,7 @@ function playdate.update()
     end
     
     -- draw all non-player tiles
-    pulp.tilemap:draw(0, 0)
+    tilemap:draw(0, 0)
     
     -- update player frame
     local player = pulp.player
@@ -864,9 +967,9 @@ function playdate.update()
         (playerScript.draw or playerScript.any)(playerScript, player, event_persist:new(), "draw")
     end
     
-    if not pulp.hideplayer then
+    if not pulp.hideplayer and player.tile then
         local frame = player.tile.frames[1 + (floor(player.frame) % max(1, #player.tile.frames))]
-        pulp.tile_img[frame]:draw(GRIDX * player.x, GRIDY * player.y)
+        tile_img[frame]:draw(GRIDX * (player.x + scrollx), GRIDY * (player.y + scrolly))
     end
     pulp.hideplayer = false
     
@@ -925,6 +1028,8 @@ function pulp:loadSounds()
         track:setInstrument(inst)
         
         sequence:addTrack(track)
+        
+        -- multiply by 4 because there are 4 steps in a beat? maybe?
         sequence:setTempo(4 * sound.bpm / 60)
         sound.track = track
         sound.sequence = sequence
@@ -988,6 +1093,8 @@ function pulp:exitRoom()
 end
 
 function pulp:enterRoom(rid)
+    disabled_exit_x = pulp.player.x
+    disabled_exit_y = pulp.player.y
     local room_idx
     if type(rid) == "number" then
         room_idx = rid
@@ -1035,7 +1142,7 @@ function pulp:enterRoom(rid)
     if pulp.roomStart then
         -- 'start' event
         pulp.roomStart = false
-        ;(game.start or game.any)(nil, event_persist:new(), "start")
+        ;(game.start or game.any)(game, nil, event_persist:new(), "start")
     end
     
     -- 'enter' event
@@ -1043,6 +1150,7 @@ function pulp:enterRoom(rid)
 end
 
 function pulp:start()
+    -- FIXME: just call pulp.__fn_swap() instead.
     pulp.player.x = pulp.startx
     pulp.player.y = pulp.starty
     pulp.player.tile = pulp.tiles[pulp.playerid]
@@ -1075,7 +1183,10 @@ function pulp:emit(evname, event)
         for y = 0,TILESH-1 do
             local tileInstance = pulp:getTileAt(x, y)
             if tileInstance.tile.script and tileInstance.tile.script[evname] then
-                (tileInstance.tile.script[evname] or tileInstance.tile.script.any)(tileInstance.tile.script, tileInstance, event, evname)
+                event.x = x
+                event.y = y
+                event.tile = tileInstance.name
+                ;(tileInstance.tile.script[evname] or tileInstance.tile.script.any)(tileInstance.tile.script, tileInstance, event, evname)
             end
         end
     end
@@ -1083,7 +1194,11 @@ function pulp:emit(evname, event)
     -- player
     local playerScript = pulp:getPlayerScript()
     if playerScript then
-        (playerScript[evname] or playerScript.any)(playerScript, pulp.player, event, evname)
+        event.x = pulp.player.x
+        event.y = pulp.player.y
+        assert(pulp.player)
+        event.tile = pulp.player.tile.name
+        ;(playerScript[evname] or playerScript.any)(playerScript, pulp.player, event, evname)
     end
 end
 
@@ -1198,10 +1313,6 @@ function pulp.__fn_draw(x, y, tid)
     end
 end
 
-function pulp.__fn_fill(...)
-    -- todo
-end
-
 function pulp.__fn_restore(...)
     -- todo
 end
@@ -1226,10 +1337,10 @@ function pulp.__fn_wait(self, actor, event, evname, block, duration)
 end
 
 function pulp.__fn_say(x,y,w,h, self, actor, event, evname, block,text)
-    assert(not block or type(block) == "function")
-    assert(type(text) == "string")
-    x = min(x or 4, TILESW - 1)
-    y = min(y or 4, TILESH - 1)
+    assert(not block or type(block) == "function", "say 'then' block is not a function")
+    assert(type(text) == "string", "say text must be a string")
+    x = min(x or 3, TILESW - 1) + 1
+    y = min(y or 3, TILESH - 1) + 1
     if w == 0 then w = nil end
     if h == 0 then h = nil end
     w = w or (TILESW - 8)
@@ -1323,12 +1434,12 @@ function pulp.__fn_fin(text)
 end
 
 function pulp.__fn_window(x, y, w, h)
-    x = x or 4
-    y = y or 4
+    x = x or 3
+    y = y or 3
     w = w or TILESW - 4
     h = h or 6
-    local x2 = x + w
-    local y2 = y + h
+    local x2 = x + w - 1
+    local y2 = y + h - 1
     
     if x2 <= x or y2 <= y then return end
     
@@ -1360,12 +1471,13 @@ function pulp.__fn_window(x, y, w, h)
 end
 
 function pulp.__fn_act()
+    local player = pulp.player
     local x = player.x
     local y = player.y
     local dx = event_persist.dx
     local dy = event_persist.dy
     if x >= 0 and y >= 0 and x < TILESW and y < TILESH then
-        local itemtile = roomtiles[x][y]
+        local itemtile = roomtiles[y][x]
         if itemtile.ttype == TTYPE_ITEM then
             local _script = itemtile.script or {};
             (_script.collect or _script.any or default_event_collect)(_script, itemtile, event_persist:new(), "collect")
@@ -1374,7 +1486,7 @@ function pulp.__fn_act()
     x += dx
     y += dy
     if x >= 0 and y >= 0 and x < TILESW and y < TILESH then
-        local itemtile = roomtiles[x][y]
+        local itemtile = roomtiles[y][x]
         if itemtile.ttype == TTYPE_SPRITE then
             local _script = itemtile.script or {};
             (_script.interact or _script.any or default_event_interact)(_script, itemtile, event_persist:new(), "interact")
@@ -1386,21 +1498,47 @@ function pulp.__fn_dump(...)
     -- todo
 end
 
+function pulp.__fn_crop(x, y, w, h)
+    local prevw = cropr - cropl + 1
+    local prevh = cropu - cropd + 1
+    cropl = max(0, x or cropl)
+    cropr = min(TILESW, cropl + (w or prevw)) - 1
+    cropu = max(0, y or cropu)
+    cropd = min(TILESH, cropu + (h or prevh)) - 1
+    
+    iscropped = false
+    if cropl ~= 0 or cropr ~= TILESW - 1 or cropu ~= 0 or cropd ~= TILESH - 1 then
+        iscropped = true
+    end
+end
+
 function pulp.__fn_goto(x, y, room)
-    local player = pulp.player
-    pulp.roomQueuedX = x
-    pulp.roomQueuedY = y
     if room then
+        pulp.roomQueuedX = x
+        pulp.roomQueuedY = y
         pulp.roomQueued = room
+    else
+        local player = pulp.player
+        player.x = x or player.x
+        player.y = y or player.y
+        
+        -- event_persist.px / py are cached.
+        -- it would seem like a good idea to update them here, but the reference
+        -- implementation does not do that, so we won't either.
+        --event_persist.px = x
+        --event_persist.py = y
+        -- (same thing with event.x and event.y)
+        
+        -- oddly, the reference implementation seems to do this:
+        local playerScript = pulp:getPlayerScript()
+        if playerScript then
+            (playerScript.update or playerScript.any)(playerScript, player, event_persist:new(), "update")
+        end
     end
 end
 
 function pulp.__fn_invert()
     pulp.invert = not pulp.invert
-end
-
-function pulp.__fn_log(x)
-    --print(x)
 end
 
 function pulp.__fn_ignore()
@@ -1439,12 +1577,18 @@ function pulp.__fn_swap(actor, newid)
         if newtile then
             actor.tile = newtile
             actor.id = actor.tile.id
-            actor.script = actor.tile.script
+            if not actor.is_player then
+                actor.script = actor.tile.script
+            end
             actor.solid = actor.tile.solid
             actor.name = actor.tile.name
             actor.ttype = actor.tile.type
             actor.fps = actor.tile.fps
             actor.fps_lookup_idx = actor.tile.fps_lookup_idx
+            actor.frame = 0
+            if actor.id == 396 then
+                print("frame <- 0")
+            end
         else
             print("cannot swap to tile " .. newid)
         end

@@ -25,7 +25,11 @@ You can then compile using `pdc` as normal:
 
 While `pulp-to-lua` should already significantly improve performance by an order of magnitude at least, there are additional steps you can take to make sure your code runs optimally:
 
-- Avoid using `emit` wherever possible. This function is slow and it is usually preferable to use `call` unless you really do want all actors to respond.
+- Avoid using `emit` wherever possible. This function is slow and it is usually preferable to use `call` unless you really do want all actors (tile instances, player, room, game) to respond.
+- There is generally no need to replace string literals for tile IDs e.g. `draw "white-tile"` for `draw 0`. The transpiler will do this automatically if it can detect this.
+- To improve performance, up to around ~150 variables will be declared as `local` by the transpiler, and it will select the variables that appear most frequently in the code. This is not necessarily the variables which are most frequently used at runtime! Do with this information what you will -- you may wish to reuse variable names where possible.
+- reading from `event.px`, `event.py`, `event.x`, `event.y` are a bit more expensive. Cache them at the start of the function if possible.
+- `mimic` events can be heavily optimized by the transpiler for events that contain only one line and that line is `mimic` with a static name or id literal.
 
 ## Incompatabilities
 
