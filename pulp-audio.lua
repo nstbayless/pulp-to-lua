@@ -73,6 +73,14 @@ local function newVoice(type, a,d,s,r,v)
 		alt = false,
 		envelope = {},
 	}
+	
+	if type == 1 then
+		-- square wave duty cycle
+		for _, synth in pairs(voice.synths) do
+			synth:setParameter(1, 0.5)
+		end
+	end
+	
 	setEnvelope(voice, type, a,d,s,r,v)
 	return voice
 end

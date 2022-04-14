@@ -4,7 +4,7 @@ assert(___pulp, "___pulp object must be defined before import")
 -- (we need to declare this before importing pulp-audio)
 SOUNDSCALE = {
     [0] = 0.16, -- sine
-    [1] = 0.18, -- square
+    [1] = 0.28, -- square
     [2] = 0.15, -- sawtooth
     [3] = 0.22, -- triangle
     [4] = 0.08  -- noise
