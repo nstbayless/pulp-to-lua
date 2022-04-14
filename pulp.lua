@@ -308,16 +308,16 @@ function pulp:associateScript(name, t, id)
     local script = type(name) == "string" and pulp.scripts[name] or name
     assert(script, "no script found with name '" .. tostring(name) .. "'")
     if t == "tile" then
-        assert(pulp.tiles[id])
+        assert(pulp.tiles[id], "script \"" .. name .. "\" for tile " .. tostring(id) .. ", but tile does not exist")
         pulp.tiles[id].script = script
     elseif t == "room" then
-        assert(pulp.rooms[id], "unknown room id " .. tostring(id))
+        assert(pulp.rooms[id], "associate room script with unknown room id " .. tostring(id))
         pulp.rooms[id].script = script
     elseif t == "global" and id == 0 then
         pulp.gameScript = script
         pulp.game.script = script
     else
-        assert(false)
+        assert(false, "unrecognized script type " .. tostring(t))
     end
 end
 
@@ -1096,65 +1096,68 @@ function pulp:loadSounds()
     end
     
     -- we handle sounds ourself
-    for _, sound in pairs(pulp.sounds) do
-        pulp.sounds_by_name[sound.name] = sound
-        sound.attack = sound.attack or 0.005
-        sound.decay = sound.decay or 0.1
-        sound.sustain = sound.sustain or 0.5
-        sound.release = sound.release or 0.1
-        sound.volume = sound.volume or 1
-        local sequence = playdate.sound.sequence.new() 
-        
-        local steps_per_second = 4 * sound.bpm / 60
-        local final = FIREFOX_SOUND_COMPAT and (1 + ceil((sound.attack + sound.decay) * steps_per_second)) or 1 
-        local max_polyphony = 3
-        for j=1,final do 
-            local any_notes = false
-            local track = playdate.sound.track.new()
+    for i, sound in pairs(pulp.sounds) do
+        if sound.name == nil then
+            print("WARNING: sound #" .. tostring(i) .. " has nil name")
+        else
+            pulp.sounds_by_name[sound.name] = sound
+            sound.attack = sound.attack or 0.005
+            sound.decay = sound.decay or 0.1
+            sound.sustain = sound.sustain or 0.5
+            sound.release = sound.release or 0.1
+            sound.volume = sound.volume or 1
+            local sequence = playdate.sound.sequence.new() 
             
-            local scale_factor = 1
-            if FIREFOX_SOUND_COMPAT and j < final then
-                local max_time = j / steps_per_second
-                local destime = (sound.attack + sound.decay)
-                scale_factor = min(max_time/destime, 1)
-            end
-            
-            local inst = playdate.sound.instrument.new()
-            for i = 1,max_polyphony do
-                local synth = playdate.sound.synth.new(wavetypes[sound.type])
-                synth:setAttack(sound.attack * scale_factor)
-                synth:setDecay(sound.decay * scale_factor)
-                -- it doesn't really make sense that sustain is scaled by scale_factor, but firefox does this.
-                synth:setSustain(sound.sustain * scale_factor)
-                synth:setRelease(sound.release)
+            local steps_per_second = 4 * sound.bpm / 60
+            local final = FIREFOX_SOUND_COMPAT and (1 + ceil((sound.attack + sound.decay) * steps_per_second)) or 1 
+            local max_polyphony = 3
+            for j=1,final do 
+                local any_notes = false
+                local track = playdate.sound.track.new()
                 
-                synth:setVolume(sound.volume * SOUNDSCALE[sound.type])
+                local scale_factor = 1
+                if FIREFOX_SOUND_COMPAT and j < final then
+                    local max_time = j / steps_per_second
+                    local destime = (sound.attack + sound.decay)
+                    scale_factor = min(max_time/destime, 1)
+                end
                 
-                inst:addVoice(synth)
-            end
-            track:setInstrument(inst)
-            local max_polyphony = min(3, 1 + ceil(sound.bpm * SPF * (sound.decay or 0.1)))
-            for i=1,#sound.notes,3 do
-                local octave = sound.notes[i+1] + 1
-                local pitch = sound.notes[i] + 12 * octave - 1
-                local length = sound.notes[i + 2]
-                local step = floor((i+2)/3)
-                if length ~= 0 then
-                    if length == j or (length >= j and j == final) then
-                        track:addNote(step, pitch, length)
-                        any_notes = true
+                local inst = playdate.sound.instrument.new()
+                for i = 1,max_polyphony do
+                    local synth = playdate.sound.synth.new(wavetypes[sound.type])
+                    synth:setAttack(sound.attack * scale_factor)
+                    synth:setDecay(sound.decay * scale_factor)
+                    -- it doesn't really make sense that sustain is scaled by scale_factor, but firefox does this.
+                    synth:setSustain(sound.sustain * scale_factor)
+                    synth:setRelease(sound.release)
+                    
+                    synth:setVolume(sound.volume * SOUNDSCALE[sound.type])
+                    
+                    inst:addVoice(synth)
+                end
+                track:setInstrument(inst)
+                local max_polyphony = min(3, 1 + ceil(sound.bpm * SPF * (sound.decay or 0.1)))
+                for i=1,#sound.notes,3 do
+                    local octave = sound.notes[i+1] + 1
+                    local pitch = sound.notes[i] + 12 * octave - 1
+                    local length = sound.notes[i + 2]
+                    local step = floor((i+2)/3)
+                    if length ~= 0 then
+                        if length == j or (length >= j and j == final) then
+                            track:addNote(step, pitch, length)
+                            any_notes = true
+                        end
                     end
                 end
+            
+                if any_notes then
+                    sequence:addTrack(track)
+                end
             end
-        
-            if any_notes then
-                sequence:addTrack(track)
-            end
-        end
 
-        sequence:setTempo(steps_per_second)
-        sound.track = track
-        sound.sequence = sequence
+            sequence:setTempo(steps_per_second)
+            sound.sequence = sequence
+        end
     end
 end
 
@@ -1465,15 +1468,19 @@ function pulp.__fn_label(x, y, len, lines, text)
             for k=numbytes,1,-1 do
                 i += 1
                 frame *= 0x80
-                local b = string_byte(substr(text, j+k, j+k)) % 0x80
+                local _chr = string_byte(substr(text, j+k, j+k))
+                local b = 0
+                if _chr then
+                    b = _chr % 0x80
+                else
+                    print("WARNING: error decoding embedded tile")
+                end
                 frame += b
             end
-            if frame <= #pulp.tile_img then
+            if pulp.tile_img[frame] then
                 pulp.tile_img[frame]:draw(x * GRIDX, y * GRIDY, nil, HALFWIDTH_SRCRECT)
-                x += xinc
-            else
-                x += xinc
             end
+            x += xinc
         end
         i += 1
     end
@@ -1758,12 +1765,12 @@ end
 
 function pulp.__fn_tell(event, evname, block, actor)
     if type(actor) == "string" or type(actor) == "number" then
-        -- UB! check.
-        print("WARNING: `tell` command with tile id/name may be incorrectly implemented in pulp-to-lua.")
-        -- OPTIMIZE: use direct loop.
-        pulp:forTiles(actor, function(x, y, tilei)
-            block(tilei.script or EMPTY, tilei, event, evname)
-        end)
+        local tile = pulp:getTile(actor)
+        if tile then
+            block(actor, nil, event, evname)
+        else
+            print("WARNING: `tell` command on invalid tile '" .. tostring(actor) .. '"')
+        end
     elseif type(actor) == "table" then
         block(actor.script or EMPTY, actor, event, evname)
     else

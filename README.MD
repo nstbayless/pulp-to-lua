@@ -1,8 +1,8 @@
-# Pulp-To-Lua
+# Pulp Mill (Pulp-To-Lua Transpiler)
 
 *Converts [Pulp](https://play.date/pulp/) projects to the Lua SDK for the [Panic Playdate](https://play.date/).*
 
-This transpiler is primarily intended to improve performance.
+This transpiler is primarily intended to improve performance of Pulp projects, but you can also use it to extend the project with Lua API functionality not available in Pulp.
 
 ## Requirements
 

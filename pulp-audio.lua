@@ -480,8 +480,12 @@ local function loadAudio()
 	songsByName = {}
 	if not data.songs then data.songs = {} end
 	for i, song in pairs(data.songs) do
-		songsByName[song.name] = song
-		song.splits = nil -- unneeded
+		if song.name == nil then
+			print("error: song #" .. tostring(i) .. " has nil name field")
+		else
+			songsByName[song.name] = song
+			song.splits = nil -- unneeded
+		end
 	end
 end
 

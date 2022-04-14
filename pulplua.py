@@ -183,6 +183,9 @@ tile_id = 0
 code += "\n__pulp.tiles = {}\n"
 for tile in pulp["tiles"]:
     if tile:
+        if type(tile) == bool or tile is None:
+            print("WARNING: peculiar entry in tiles table. Expected JSON object.")
+            continue
         tile_ids[tile['name']] = tile['id']
         code += f"__pulp.tiles[{tile['id']}] = " + "{\n"
         code += f"    id = {tile['id']},\n"
@@ -204,7 +207,12 @@ def clamp(x, a, b):
 
 # rooms
 code += "\n__pulp.rooms = {}\n"
+j = -1
 for room in pulp["rooms"]:
+    j += 1
+    if type(room) == bool or room is None:
+        print(f"WARNING: peculiar entry in room table at index {j}. Expected JSON object.")
+        continue
     code += f"__pulp.rooms[{room['id']}] = " + "{\n"
     code += f"  id = {room['id']},\n"
     code += f"  name = \"{room['name']}\",\n"
@@ -238,8 +246,14 @@ for room in pulp["rooms"]:
     code += "}\n"
     
 # sounds
+j = -1
 code += "\n__pulp.sounds = {}\n"
 for sound in pulp["sounds"]:
+    j += 1
+    if type(sound) != dict or sound is None:
+        print(f"WARNING: peculiar entry in sounds table at index {j}. Expected JSON object.")
+        code += f"__pulp.sounds[{j}] = " + "{}\n"
+        continue
     code += f"__pulp.sounds[{sound['id']}] = " + "{\n"
     code += f"  bpm = {sound['bpm']},\n"
     code += f"  name = \"{sound['name']}\",\n"
@@ -266,7 +280,12 @@ for sound in pulp["sounds"]:
 
 #songs    
 code += "\n__pulp.songs = {}\n"
+j = -1
 for song in pulp["songs"]:
+    j += 1
+    if type(song) == bool or song is None:
+        print(f"WARNING: peculiar entry in songs table at index {j}. Expected JSON object.")
+        continue
     code += f"__pulp.songs[#__pulp.songs + 1] = " + "{\n"
     code += f"  bpm = {song['bpm']},\n"
     code += f"  id = {song['id']},\n"
@@ -307,6 +326,9 @@ for song in pulp["songs"]:
 
 #scripts
 for pulpscript in pulp["scripts"]:
+    if type(pulpscript) == bool:
+        print("WARNING: boolean entry in script table. Expected JSON object.")
+        continue
     script = Script(pulpscript["id"], pulpscript["type"])
     if "data" in pulpscript:
         for key in pulpscript["data"]:
