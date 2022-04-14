@@ -887,7 +887,7 @@ function playdate.update()
                 else
                     local tilei = roomtiles[y - scrolly][x - scrollx]
                     local dsttilei = roomtiles[y][x]
-                    local frames = tilei.tile.frames
+                    local frames = tilei.frames
                     if tilei.fps > 0 then
                         tilei.frame = pulp_tile_fps_lookup_floor[tilei.fps_lookup_idx]
                     elseif tilei.frame >= #frames then
@@ -1125,6 +1125,7 @@ function pulp:enterRoom(rid)
             tile = tile,
             fps = tile.fps,
             fps_lookup_idx = tile.fps_lookup_idx,
+            frames = tile.frames,
             solid = tile.solid,
             script = tile.script,
             x = x,
@@ -1155,6 +1156,7 @@ function pulp:start()
     pulp.player.y = pulp.starty
     pulp.player.tile = pulp.tiles[pulp.playerid]
     pulp.player.id = pulp.playerid
+    pulp.player.frames = pulp.player.tile.frames
     pulp.player.solid = false
     pulp.player.name = pulp.player.tile.name
     pulp.player.ttype = TTYPE_PLAYER
@@ -1196,7 +1198,7 @@ function pulp:emit(evname, event)
     if playerScript then
         event.x = pulp.player.x
         event.y = pulp.player.y
-        assert(pulp.player)
+        assert(pulp.player.tile)
         event.tile = pulp.player.tile.name
         ;(playerScript[evname] or playerScript.any)(playerScript, pulp.player, event, evname)
     end
@@ -1580,15 +1582,13 @@ function pulp.__fn_swap(actor, newid)
             if not actor.is_player then
                 actor.script = actor.tile.script
             end
+            actor.frames = newtile.frames
             actor.solid = actor.tile.solid
             actor.name = actor.tile.name
             actor.ttype = actor.tile.type
             actor.fps = actor.tile.fps
             actor.fps_lookup_idx = actor.tile.fps_lookup_idx
             actor.frame = 0
-            if actor.id == 396 then
-                print("frame <- 0")
-            end
         else
             print("cannot swap to tile " .. newid)
         end

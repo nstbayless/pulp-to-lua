@@ -109,8 +109,8 @@ inlinefuncs = {
     "__fn_dec": "{0} -= 1",
     "__fn_log": "__print({0})",
     # OPTIMIZE: we can hardcode in __pix8scale to improve performance. __pix8scale is usually 1!
-    # OPTIMIZE: we can probably perform the color string lookup at compile-time in most cases
-    "__fn_fill": "__fillrect({0} * __pix8scale, {1} * __pix8scale, {2} * __pix8scale, {3} * __pix8scale, __fillcolours[{4}])",
+    # OPTIMIZE: we can probably perform the color decision at compile-time in most cases
+    "__fn_fill": "__setcolour(__fillcolours[{4}]); __fillrect({0} * __pix8scale, {1} * __pix8scale, {2} * __pix8scale, {3} * __pix8scale)",
     "__ex_frame": "({0}.frame or 0)",
     "__ex_invert": "(__pulp.invert and 1 or 0)",
     "__ex_degrees": "({0} * 360 / __tau)",
