@@ -430,7 +430,10 @@ with open(os.path.join(outpath, "pdxinfo"), "w") as f:
     f.write("name=" + pulp["name"] + str('\n'))
     f.write("author=" + pulp["author"] + str('\n'))
     f.write("description=" + pulp["intro"] + str('\n'))
-    f.write("bundleID=" + "game.pulp." + pulp["name"].replace(" ","").replace(".", "") + str('\n'))
+    f.write("bundleID=" + "game.pulp." + \
+        pulp["author"].replace(" ","").replace(".", "") + "." + \
+        pulp["name"].replace(" ","").replace(".", "") + \
+        str('\n'))
     f.write("version=" + str(pulp["version"]) + str('\n'))
     f.write("buildNumber=123\n")
     f.write("imagePath=" + launcher_path + "\n")
