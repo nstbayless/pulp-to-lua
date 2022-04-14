@@ -45,6 +45,11 @@ def startcode():
     code = """-- tweak sound engine to sound as it does on firefox.
 -- set this to false to make the sound engine sound as it does on pdx export.
 local FIREFOX_SOUND_COMPAT = true
+
+-- set random seed
+math.randomseed(playdate.getSecondsSinceEpoch())
+
+-- pulp options (must be set before `import "pulp"`)
 """
     code += "___pulp = {\n" \
         + f"  playerid = {playerid},\n" \
@@ -72,7 +77,6 @@ local FIREFOX_SOUND_COMPAT = true
     code += "local __print <const> = print\n"
     code += "local __getTime <const> = playdate.getTime\n"
     code += "local __getSecondsSinceEpoch <const> = playdate.getSecondsSinceEpoch\n"
-    code += "math.randomseed(__getSecondsSinceEpoch())\n"
     code += """local __fillrect <const> = playdate.graphics.fillRect
 local __setcolour <const> = playdate.graphics.setColor
 local __fillcolours <const> = {
