@@ -265,7 +265,7 @@ def ex_embed(expression, ctx):
 def ex_subroutine(expression, ctx):
     s = "function(__self, __actor, event, evname)\n"
     ctx.indent += 2
-    s += transpile_commands(ctx.blocks[expression[1]], ctx)
+    s += transpile_commands(ctx.blocks[expression[1]], ctx, True)
     ctx.indent -= 2
     return s + ctx.gi() + "  end"
     
@@ -386,7 +386,7 @@ def op_tell(cmd, ctx):
         s += ctx.gi() + f"if __actor and __actor.tile then\n"
         ctx.indent += 1
         s += ctx.gi() + f"local __self = __actor.script or __pulp.EMPTY\n"
-        s += transpile_commands(ctx.blocks[cmd[2][1]], ctx)
+        s += transpile_commands(ctx.blocks[cmd[2][1]], ctx, True)
         ctx.indent -= 1
         s += ctx.gi() + f"end\n"
         ctx.indent -= 1
@@ -404,7 +404,7 @@ def op_tell(cmd, ctx):
         s += ctx.gi() + f"if __actor then\n"
         ctx.indent += 1
         s += ctx.gi() + f"local __self = __actor.script or __pulp.EMPTY\n"
-        s += transpile_commands(ctx.blocks[cmd[2][1]], ctx)
+        s += transpile_commands(ctx.blocks[cmd[2][1]], ctx, True)
         ctx.indent -= 1
         s += ctx.gi() + f"end\n"
         ctx.indent -= 1
@@ -432,7 +432,8 @@ def opex_func(cmd, op, prefix, ctx):
                 setargs["x"] = decode_rvalue(arg[1], ctx)
                 setargs["y"] = decode_rvalue(arg[2], ctx)
                 setargs["w"] = decode_rvalue(arg[3], ctx)
-                setargs["h"] = decode_rvalue(arg[4], ctx)
+                if len(arg) > 4: # pulp game 'Monitor Duty' needs this guard
+                    setargs["h"] = decode_rvalue(arg[4], ctx)
             elif arg[0] == "block":
                 # e.g. "then" or "to"
                 setargs["block"] = decode_rvalue(arg, ctx)

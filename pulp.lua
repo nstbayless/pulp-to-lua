@@ -189,11 +189,16 @@ local function paginate(text, w, h)
     local startidx = 1
     local wordidx = 1
     local pages = {""}
+    local in_embed = false
     for i = 1,#text+1 do
         if i == #text+1 then
             pages[#pages] = pages[#pages] .. substr(text,startidx, #text)
         else
             local char = substr(text, i, i)
+            local chbyte = string_byte(text, i, i)
+            if chbyte < 0x80 then
+                in_embed = false
+            end
             if char == "\n" or char == "\f" then
                 pages[#pages] = pages[#pages] .. substr(text, startidx, i)
                 startidx = i + 1
@@ -207,6 +212,11 @@ local function paginate(text, w, h)
             elseif char == " " or char == "\t" then
                 x += 1
                 wordidx = i + 1
+            elseif chbyte >= 0x80 then
+                if not in_embed then
+                    x += 1
+                    in_embed = true
+                end
             else
                 x += 1
             end
@@ -475,7 +485,7 @@ local function updateMessage(up, down, left, right, confirm, cancel)
     if not message.showoptions and not message.text then
         if message.block then
             pulp.optattachmessage = message
-            message.block(message.self, message.script, message.actor, message.event)
+            message.block(message.self, message.actor, message.event, message.evname)
             pulp.optattachmessage = nil
             message.showoptions = true
             message.optselect = 1
@@ -547,6 +557,7 @@ local function updateMessage(up, down, left, right, confirm, cancel)
             
             -- dismiss message
             if option and option.block then
+                assert(option.event)
                 option.block(option.self, option.actor, option.event, option.evname, option)
                 
                 -- dismiss ALL menus if no submenu opened in option block
@@ -577,7 +588,7 @@ local function updateMessage(up, down, left, right, confirm, cancel)
             -- close the final page.
             if message.block then
                 pulp.optattachmessage = message
-                message.block(message.self, message.script, message.actor, message.event)
+                message.block(message.self, message.actor, message.event, message.evname)
                 pulp.optattachmessage = nil
                 message.block = nil
             end
@@ -649,8 +660,10 @@ local function drawMessage(message, submenu)
             end
             local option = message.options[i]
             local text = option.text
-            if #text > optw then
+            if not pulp.halfiwdth and #text > optw then
                 text = substr(text, 1, optw)
+            elseif pulp.halfiwdth and #text > optw * 2 then
+                text = substr(text, 1, optw * 2)
             end
             pulp.__fn_label(optx, opty + y, nil, nil, text)
             y += 1
@@ -1549,6 +1562,9 @@ function pulp.__fn_say(x,y,w,h, self, actor, event, evname, block,text)
     y = min(y or 3, TILESH - 1) + 1
     if w == 0 then w = nil end
     if h == 0 then h = nil end
+    if w and pulp.halfwidth then
+        w = ceil(w/2)
+    end
     w = w or (TILESW - 8)
     h = h or 4
     
@@ -1575,6 +1591,10 @@ function pulp.__fn_say(x,y,w,h, self, actor, event, evname, block,text)
         evname = evname,
         block = block
     }
+    
+    if block then
+        assert(event, "ask block not given an event")
+    end
 end
 
 function pulp.__fn_menu(x,y,w,h,self, actor, event, evname, block)
@@ -1625,6 +1645,9 @@ function pulp.__fn_option(self, actor, event, evname, block, text)
         event = event,
         evname = evname,
     }
+    if block then
+        assert(event, "option event is nil")
+    end
 end
 
 pulp.__fn_ask = pulp.__fn_say
