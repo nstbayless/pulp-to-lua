@@ -46,7 +46,7 @@ def startcode():
         + f"  tile_img = playdate.graphics.imagetable.new(\"tiles\")\n" \
     + "}\n"
     code += "local __pulp <const> = ___pulp\n"
-    code += "import \"pulp\""
+    code += "import \"pulp\"\n"
     code += "local __sin <const> = math.sin\n"
     code += "local __cos <const> = math.cos\n"
     code += "local __tan <const> = math.tan\n"
@@ -179,10 +179,10 @@ for tile in pulp["tiles"]:
         code += f"    solid = {tile['solid']},\n".lower()
         if "says" in tile:
             code += f"    says = \"{escape_string(tile['says'])}\","
-        code += "    frames = {\n"
+        code += "    frames = {"
         for frame in tile["frames"]:
-            code += f"      {tileimages[frame]+1},\n"
-        code += "    nil}\n"
+            code += f"{tileimages[frame]+1},"
+        code += " }\n"
         code += "  }\n"
 
 def clamp(x, a, b):
@@ -195,10 +195,14 @@ for room in pulp["rooms"]:
     code += f"  id = {room['id']},\n"
     code += f"  name = \"{room['name']}\",\n"
     code += f"  song = {room['song']},\n"
-    code += "  tiles = {\n"
+    code += "  tiles = {"
+    i = 0
     for tile in room["tiles"]:
-        code += f"    {tile},\n"
-    code += "  nil},\n"
+        if i % 25 == 0:
+            code += "\n    "
+        code += f"{tile:4},"
+        i += 1
+    code += " },\n"
     code += "  exits = {\n"
     for exit in room["exits"]:
         code += "    {\n"
@@ -281,7 +285,7 @@ end
     code += "end\n"
 
 code += "\n"
-vars = list(ctx.vars)
+vars = sorted(list(ctx.vars))
 vars.sort(key=lambda var: -ctx.var_usage[var])
 varcode = ""
 LOCVARMAX = 160 # chosen rather arbitrarily. 200 is too high though; it won't compile.

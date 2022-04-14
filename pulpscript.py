@@ -82,6 +82,7 @@ funclist = [
     "wait",
     "window",
     "crop",
+    "play"
 ]
 
 exfuncs = [
@@ -134,7 +135,8 @@ funcargs = {
     "option": ["self", "actor", "event", "evname", "block"],
     "window": ["x", "y", "w", "h"],
     "fill": ["x", "y", "w", "h"],
-    "crop": ["x", "y", "w", "h"]
+    "crop": ["x", "y", "w", "h"],
+    "play": ["self", "actor", "event", "evname", "block"]
 }
 
 staticfuncs = {

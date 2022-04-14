@@ -86,7 +86,8 @@ pulp.EMPTY = {
 pulp.EMPTY.script = pulp.EMPTY
 pulp.gameScript = EMPTY
 
-local FPS = 20
+local FPS <const> = 20
+local SPF <const> = 1/FPS
 
 local alphabet =
       " !\"#$%&'()*+,-./0123"
@@ -457,7 +458,7 @@ local function updateMessage(up, down, left, right, confirm, cancel)
     end
     
     if message.sayAdvanceDelay > 0 then
-        message.sayAdvanceDelay -= 1/FPS
+        message.sayAdvanceDelay -= SPF
     end
     
     if not message.showoptions and not message.text then
@@ -601,7 +602,7 @@ local function drawMessage(message, submenu)
             
             -- prompt to advance
             if message.prompt_timer >= 0 and not message.showoptions then
-                local prompt_idx = 10 + floor((message.prompt_timer % FPS) / FPS * 2)
+                local prompt_idx = 10 + floor((message.prompt_timer % FPS) * SPF * 2)
                 pulp.pipe_img[prompt_idx]:draw(GRIDX * (message.x + message.w - 1), GRIDY * (message.y + message.h))
             end
         end
@@ -751,7 +752,7 @@ local function readInput()
         event_persist.ty = ty
     
         local playerScript = pulp:getPlayerScript()
-        if pulp.listen then 
+        if pulp.listen then
             if a_pressed and playerScript then
                 (playerScript.confirm or playerScript.any)(playerScript, pulp.player, event_persist:new(), "confirm")
             end
@@ -868,7 +869,7 @@ function playdate.update()
     local timers_activate = {}
     if not pulp.message then
         for i, timer in pairs(pulp.timers) do
-            timer.duration -= 1/FPS
+            timer.duration -= SPF
             if timer.duration <= 0 then
                 pulp.timers[i] = nil
                 timers_activate[#timers_activate+1] = timer
@@ -882,9 +883,9 @@ function playdate.update()
     
     -- precompute tile indices by (frame rate, frame count)
     for fps, framecs in pairs(pulp.tile_fps_lookup) do
-        local s = 1/fps
+        local s = SPF
         for i, framec in pairs(framecs) do
-            framecs[i] = framec + fps / FPS
+            framecs[i] = framec + fps * SPF
             if framecs[i] >= i then
                 framecs[i] -= i
             end
@@ -906,6 +907,8 @@ function playdate.update()
         end
     end
     
+    local framei = nil
+    
     -- update tile frames and draw tiles
     -- WARNING: DUPLICATE CODE! Yes, yes, but it's efficient, and this loop is hot.
     if scroll then
@@ -917,14 +920,28 @@ function playdate.update()
                     local tilei = roomtiles[y - scrolly][x - scrollx]
                     local dsttilei = roomtiles[y][x]
                     local frames = tilei.frames
-                    if tilei.fps > 0 then
-                        tilei.frame = pulp_tile_fps_lookup_floor[tilei.fps_lookup_idx]
-                    elseif tilei.frame >= #frames then
-                        tilei.frame = 0
+                    
+                    if tilei.play then -- [[CAN STATICALLY OPTIMIZE OUT]]
+                        framei = floor(tilei.playframe)
+                        if framei < #frames then
+                            tilei.playframe += SPF
+                        elseif tilei.play_block then
+                            timers_activate[#timers_activate+1] = {
+                                block = tilei.play_block,
+                                self = tilei.play_self,
+                                event = tilei.play_event,
+                                evname = tilei.play_evname,
+                                actor = tilei.play_actor,
+                            }
+                            tilei.play_block = nil
+                        end
+                    elseif tilei.fps > 0 then -- [[CAN STATICALLY OPTIMIZE OUT]]
+                        framei = pulp_tile_fps_lookup_floor[tilei.fps_lookup_idx]
+                        tilei.frame = framei
                     end
                     
                     -- checks if changed
-                    local frame = frames[tilei.frame + 1] or 1
+                    local frame = frames[framei + 1] or frames[1] or 1
                     if dsttilei.prev_frame ~= frame then
                         dsttilei.prev_frame = frame
                         tilemap:setTileAtPosition(x+1, y+1, frame)
@@ -938,14 +955,28 @@ function playdate.update()
             for y = cropu,cropd do
                 local tilei = roomtiles[y][x]
                 local frames = tilei.tile.frames
-                if tilei.fps > 0 then
-                    tilei.frame = pulp_tile_fps_lookup_floor[tilei.fps_lookup_idx]
-                elseif tilei.frame >= #frames then
-                    tilei.frame = 0
+                
+                if tilei.play then -- [[CAN STATICALLY OPTIMIZE OUT]]
+                    framei = floor(tilei.playframe)
+                    if framei < #frames then
+                        tilei.playframe += SPF
+                    elseif tilei.play_block then
+                        timers_activate[#timers_activate+1] = {
+                            block = tilei.play_block,
+                            self = tilei.play_self,
+                            event = tilei.play_event,
+                            evname = tilei.play_evname,
+                            actor = tilei.play_actor,
+                        }
+                        tilei.play_block = nil
+                    end
+                elseif tilei.fps > 0 then
+                    framei = pulp_tile_fps_lookup_floor[tilei.fps_lookup_idx]
+                    tilei.frame = framei
                 end
                 
                 -- checks if changed
-                local frame = frames[tilei.frame + 1] or 1
+                local frame = frames[tilei.frame + 1] or frames[1] or 1
                 if tilei.prev_frame ~= frame then
                     tilei.prev_frame = frame
                     tilemap:setTileAtPosition(x+1, y+1, frame)
@@ -975,7 +1006,7 @@ function playdate.update()
     -- execute elapsed timer events
     for i=1,#timers_activate do
         local timer = timers_activate[i]
-        timer.block(timer.self, timer.actor, timer.event)
+        timer.block(timer.self, timer.actor, timer.event, timer.evname)
     end
     
     -- draw all non-player tiles
@@ -1006,7 +1037,7 @@ function playdate.update()
     
     -- shake timer
     if pulp.shake > 0 then
-        pulp.shake -= 1/FPS
+        pulp.shake -= SPF
         if pulp.shake <= 0 then
             playdate.display.setOffset(0, 0)
         else
@@ -1029,7 +1060,7 @@ function pulp:loadSounds()
         pulp.sounds_by_name[sound.name] = sound
         local sequence = playdate.sound.sequence.new() 
         local track = playdate.sound.track.new()
-        local max_polyphony = min(3, 1 + ceil(sound.bpm / FPS * (sound.decay or 0.1)))
+        local max_polyphony = min(3, 1 + ceil(sound.bpm * SPF * (sound.decay or 0.1)))
         for i=1,#sound.notes,3 do
             local octave = sound.notes[i+1] + 1
             local pitch = sound.notes[i] + 12 * octave - 1
@@ -1163,6 +1194,7 @@ function pulp:enterRoom(rid)
             fps = tile.fps,
             fps_lookup_idx = tile.fps_lookup_idx,
             frames = tile.frames,
+            play = false,
             solid = tile.solid,
             script = tile.script,
             x = x,
@@ -1199,6 +1231,7 @@ function pulp:start()
     pulp.player.ttype = TTYPE_PLAYER
     pulp.player.fps = pulp.player.tile.fps
     pulp.player.fps_lookup_idx = pulp.player.tile.fps_lookup_idx
+    pulp.player.play = false
     
     pulp.roomStart = true
     pulp.roomQueued = nil
@@ -1316,8 +1349,14 @@ function pulp.__fn_sound(sid)
     end
 end
 
-function pulp.__fn_play(...)
-    -- todo
+function pulp.__fn_play(self, actor, event, evname, block, id)
+    pulp.__fn_swap(actor, id)
+    actor.play = true
+    actor.frame = 0
+    actor.play_self = self
+    actor.play_event = event
+    actor.play_evname = evname
+    actor.play_block = block
 end
 
 local font_lookup_character <const> = {}
@@ -1678,6 +1717,7 @@ function pulp.__fn_swap(actor, newid)
             if not actor.is_player then
                 actor.script = actor.tile.script
             end
+            actor.play = false
             actor.frames = newtile.frames
             actor.solid = actor.tile.solid
             actor.name = actor.tile.name
