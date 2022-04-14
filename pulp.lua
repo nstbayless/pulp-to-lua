@@ -1769,7 +1769,7 @@ function pulp.__fn_tell(event, evname, block, actor)
     if type(actor) == "string" or type(actor) == "number" then
         local tile = pulp:getTile(actor)
         if tile then
-            block(actor, nil, event, evname)
+            block(tile.script, nil, event, evname)
         else
             print("WARNING: `tell` command on invalid tile '" .. tostring(actor) .. '"')
         end
