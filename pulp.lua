@@ -479,6 +479,9 @@ local function updateMessage(up, down, left, right, confirm, cancel)
             pulp.optattachmessage = nil
             message.showoptions = true
             message.optselect = 1
+            if message.options and #message.options > 0 then
+                pulp:emit("change", event_persist:new())
+            end
         end
         if #message.options == 0 then
             -- dismiss menu
@@ -490,6 +493,7 @@ local function updateMessage(up, down, left, right, confirm, cancel)
     
     if message.showoptions then
         if message.sayAdvanceDelay > 0 then return end
+        local prevoptsel = message.optselect
         if up then
             message.optselect -= 1
         elseif down then
@@ -534,6 +538,10 @@ local function updateMessage(up, down, left, right, confirm, cancel)
         
         message.optselect = max(min(message.optselect, #message.options), 1) -- paranoia
         
+        if prevoptsel ~= message.optselect then
+            pulp:emit("change", event_persist:new())
+        end
+        
         if confirm then
             local option = message.options[message.optselect]
             
@@ -577,6 +585,9 @@ local function updateMessage(up, down, left, right, confirm, cancel)
             if message.options and #message.options then
                 message.showoptions = true
                 message.optselect = 1
+                if message.options and #message.options > 0 then
+                    pulp:emit("change", event_persist:new())
+                end
             else
                 -- dismiss message if no menus opened up
                 message.dismiss = true
@@ -856,6 +867,7 @@ function playdate.update()
     end
     
     if pulp.restart then
+        pulp:emit("finish", event_persist:new())
         __pulp_audio.killCallbacks()
         pulp:savestore()
         pulp.resetvars()
@@ -1363,10 +1375,6 @@ function pulp:savestore()
     pulp.store_dirty = false
 end
 
--- EVENTS TODO:
--- finish [game]
--- change [game]
-
 ------- IMPERATIVE FUNCTIONS --------------------------------------------------
 
 function pulp.__fn_stop()
@@ -1750,6 +1758,8 @@ end
 
 function pulp.__fn_tell(event, evname, block, actor)
     if type(actor) == "string" or type(actor) == "number" then
+        -- UB! check.
+        print("WARNING: `tell` command with tile id/name may be incorrectly implemented in pulp-to-lua.")
         -- OPTIMIZE: use direct loop.
         pulp:forTiles(actor, function(x, y, tilei)
             block(tilei.script or EMPTY, tilei, event, evname)
