@@ -178,10 +178,8 @@ def optimize_name_ref(cmd, idx):
             ]
             return True
     return False
-
-def ex_get(expression, ctx):
-    varname = ctx.pingvar(expression[1])
     
+def remap_special_varname(varname, ctx):
     # these require special caching behaviour per-function
     # note that they cannot be set (op_set), so we don't need to consider them there.
     if varname == "event.px":
@@ -201,8 +199,14 @@ def ex_get(expression, ctx):
         return "__event_tile"
     elif varname == "event.room":
         return "event.room.name"
+    elif varname == "event.player":
+        return "__pulp.player.name"
         
     return varname
+
+def ex_get(expression, ctx):
+    return remap_special_varname(ctx.pingvar(expression[1]), ctx)
+    
     
 def ex_format(expression, ctx):
     s = ""
@@ -281,7 +285,7 @@ def op_block(cmd, statement, follow, end, ctx):
     compsym = compdict[comparison]
     if istoken(condition[1]):
         compl = condition[1]
-        compl = ctx.pingvar(compl)
+        compl = remap_special_varname(ctx.pingvar(compl), ctx)
     else:
         compl = decode_rvalue(condition[1], ctx)
     compr = decode_rvalue(condition[2], ctx)
@@ -351,9 +355,11 @@ def op_tell(cmd, ctx):
         ctx.indent -= 1
         s += ctx.gi() + "end\n"
         return s
-    elif type(cmd[1]) == list and cmd[1][0] == "get" and cmd[1][1] in ["event.room", "event.game"]:
+    elif type(cmd[1]) == list and cmd[1][0] == "get" and cmd[1][1] in ["event.room", "event.game", "event.player"]:
         # inline version of 'tell event.X to'
         target = cmd[1][1]
+        if target == "event.player":
+            target = "__pulp.player"
         s = f"do --tell {target} to\n"
         ctx.indent += 1
         assert cmd[2][0] == "block"

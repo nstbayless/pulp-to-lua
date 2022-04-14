@@ -910,7 +910,7 @@ function playdate.update()
     local framei = nil
     
     -- update tile frames and draw tiles
-    -- WARNING: DUPLICATE CODE! Yes, yes, but it's efficient, and this loop is hot.
+    -- WARNING: DUPLICATE CODE! Yes, yes, but it's efficient, and this loop is hot, oh boy.
     if scroll then
         for x = cropl,cropr do
             for y = cropu,cropd do
@@ -922,9 +922,9 @@ function playdate.update()
                     local frames = tilei.frames
                     
                     if tilei.play then -- [[CAN STATICALLY OPTIMIZE OUT]]
-                        framei = floor(tilei.playframe)
+                        framei = floor(tilei.frame)
                         if framei < #frames then
-                            tilei.playframe += SPF
+                            tilei.frame += SPF * tilei.fps
                         elseif tilei.play_block then
                             timers_activate[#timers_activate+1] = {
                                 block = tilei.play_block,
@@ -957,9 +957,9 @@ function playdate.update()
                 local frames = tilei.tile.frames
                 
                 if tilei.play then -- [[CAN STATICALLY OPTIMIZE OUT]]
-                    framei = floor(tilei.playframe)
+                    framei = floor(tilei.frame)
                     if framei < #frames then
-                        tilei.playframe += SPF
+                        tilei.frame += SPF * tilei.fps
                     elseif tilei.play_block then
                         timers_activate[#timers_activate+1] = {
                             block = tilei.play_block,
@@ -1509,13 +1509,13 @@ function pulp.__fn_say(x,y,w,h, self, actor, event, evname, block,text)
 end
 
 function pulp.__fn_menu(x,y,w,h,self, actor, event, evname, block)
-    x = x or 4
-    y = y or 4
+    x = x or 2
+    y = y or 3
     assert(type(block) == "function")
     
     pulp.message = {
-        optx = x,
-        opty = y,
+        optx = x + 2,
+        opty = y + 1,
         options_width = 0, -- text width of largest option
         optw = w,
         opth = h,
@@ -1703,7 +1703,7 @@ function pulp.__fn_tell(event, evname, block, actor)
     elseif type(actor) == "table" then
         block(actor.script or EMPTY, actor, event, evname)
     else
-        assert(false, "invalid tell target")
+        assert(false, "invalid tell target: " .. tostring(actor))
     end
 end
 
