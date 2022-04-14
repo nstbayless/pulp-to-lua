@@ -195,6 +195,12 @@ def remap_special_varname(varname, ctx):
     elif varname == "event.y":
         ctx.get_funccache().add("local __event_y = __actor.y or 0")
         return "__event_y"
+    elif varname == "event.dx":
+        ctx.get_funccache().add("local __event_dx = event.dx or 0")
+        return "__event_dx"
+    elif varname == "event.dy":
+        ctx.get_funccache().add("local __event_dy = event.dy or 0")
+        return "__event_dy"
     elif varname == "event.tile":
         ctx.get_funccache().add("local __event_tile = __actor.name or 0")
         return "__event_tile"

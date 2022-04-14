@@ -1723,6 +1723,8 @@ function pulp.__fn_goto(x, y, room)
         pulp.roomQueued = room
     else
         local player = pulp.player
+        event_persist.dx = (x or player.x) - player.x
+        event_persist.dy = (y or player.y) - player.y
         player.x = x or player.x
         player.y = y or player.y
         
