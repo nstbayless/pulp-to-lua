@@ -4,7 +4,17 @@ import os
 import shutil
 from store import LuaOut as LuaOut
 from pulpscript import transpile_event, PulpScriptContext, istoken, tile_ids, escape_string
-from PIL import Image
+
+try:
+    from PIL import Image
+except:
+    print("ERROR. Failed to open module PIL. You may need to install PIL or Pillow.")
+    print("PIL is a python image manipulation library. It is required to produce the tile images for pulp.")
+    print("You can install it via the command line.")
+    print("Do this:")
+    print()
+    print("  python3 -m pip install Pillow")
+    exit(1)
 
 if len(sys.argv) >= 2:
     file = sys.argv[1]
