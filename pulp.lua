@@ -189,7 +189,7 @@ local function paginate(text, w, h)
     local startidx = 1
     local wordidx = 1
     local pages = {""}
-    local in_embed = false
+    local in_embed = 0
     for i = 1,#text+1 do
         if i == #text+1 then
             pages[#pages] = pages[#pages] .. substr(text,startidx, #text)
@@ -197,7 +197,7 @@ local function paginate(text, w, h)
             local char = substr(text, i, i)
             local chbyte = string_byte(text, i, i)
             if chbyte < 0x80 then
-                in_embed = false
+                in_embed = 0
             end
             if char == "\n" or char == "\f" then
                 pages[#pages] = pages[#pages] .. substr(text, startidx, i)
@@ -213,9 +213,11 @@ local function paginate(text, w, h)
                 x += 1
                 wordidx = i + 1
             elseif chbyte >= 0x80 then
-                if not in_embed then
+                if in_embed <= 0 then
                     x += 1
-                    in_embed = true
+                    in_embed = chbyte - 0x80 -- embed header is number of bytes encoding embed
+                else
+                    in_embed -= 1 
                 end
             else
                 x += 1
