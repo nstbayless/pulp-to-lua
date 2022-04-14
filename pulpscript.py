@@ -197,6 +197,8 @@ def ex_get(expression, ctx):
     elif varname == "event.tile":
         ctx.get_funccache().add("local __event_tile = __actor.name or 0")
         return "__event_tile"
+    elif varname == "event.room":
+        return "event.room.name"
         
     return varname
     
@@ -316,7 +318,7 @@ def op_call(cmd, ctx):
     return f";({callfn} or __self.any)(__self, __actor, event, {fnstr}) -- call {fnstr}"
         
 def op_emit(cmd, ctx):
-    return f"__pulp:emit({decode_rvalue(cmd[1], ctx)}, __actor, event, __evname)"
+    return f"__pulp:emit({decode_rvalue(cmd[1], ctx)}, event)"
     
 def op_mimic(cmd, ctx):
     if optimize_name_ref(cmd, 1) or type(cmd[1]) == int:

@@ -10,7 +10,7 @@ You must have [python 3](https://www.python.org/) installed.
 
 ## Usage
 
-From your command line
+From your command line:
 
 `python3 pulplua.py MyPulpProject.json out/`
 

@@ -296,8 +296,8 @@ for var in vars:
             i += 1
             locvars.append(var)
         varcode += f"{var} = 0\n"
+        
 code = varcode + "\n" + code
-code += endcode()
 
 code += "local __LOCVARSET = {\n"
 for var in locvars:
@@ -317,6 +317,12 @@ code += "  if varname:find(\"__\") then varname = \"__\" .. varname end -- preve
 code += "  local __vargetter = __LOCVARGET[varname]\n"
 code += "  if __vargetter then return __vargetter() else return _G[varname] end\n"
 code += "end\n"
+code += "function __pulp.resetvars()\n"
+for var in vars:
+    code += f"  {var} = 0\n"
+code += "end\n"
+
+code += endcode()
 
 for error in list(set(ctx.errors)):
     print("--" + str(error))

@@ -28,6 +28,8 @@ pulp.tiles_by_name = {}
 pulp.rooms_by_name = {}
 pulp.sounds_by_name = {}
 pulp.roomtiles = {}
+pulp.store = {}
+pulp.store_dirty = false
 local roomtiles = pulp.roomtiles
 pulp.rooms = pulp.rooms or {}
 pulp.game = {
@@ -237,6 +239,29 @@ local function paginate(text, w, h)
     
     return pages
 end
+
+-- https://stackoverflow.com/q/49979017
+local function getStackDepth()
+    local depth = 0
+    while true do
+        if not debug.getinfo(3 + depth) then
+            break
+        end
+        depth = depth + 1
+    end
+    return depth
+end
+
+-- slow, so don't call it except sometimes
+local stackdepth = 0
+local function preventStackOverflow()
+    if stackdepth > 300 then
+        print("WARNING: stack overflow detected.")
+        return true
+    end
+    return false
+end
+
 
 local event_persist = {
     aa = playdate.getCrankPosition() or 0,
@@ -819,7 +844,11 @@ function playdate.update()
     end
     
     if pulp.restart then
+        pulp:savestore()
+        pulp.resetvars()
+        
         pulp:start()
+        return
     end
     
     if pulp.roomQueued then
@@ -985,6 +1014,11 @@ function playdate.update()
         end
     end
     
+    -- clear blank frames
+    if pulp.restart then
+        playdate.graphics.clear( playdate.graphics.kColorBlack )
+    end
+    
     --playdate.drawFPS()
     
     pulp.frame += 1
@@ -1037,6 +1071,8 @@ function pulp:loadSounds()
 end
 
 function pulp:load()
+    pulp.resetvars()
+    pulp.loadstore()
     event_persist.game = pulp.game
     pulp.game.name = pulp.gamename
     pulp.player.script = pulp:getScript(pulp.playerid) or {}
@@ -1059,26 +1095,27 @@ function pulp:load()
     end
     for i, room in pairs(pulp.rooms) do
         room.type = ACTOR_TYPE_ROOM
+        room.tiles_init = copytable(room.tiles)
         pulp.rooms_by_name[room.name] = room
         room.__tostring = function(...)
             return "0"
         end
     end
-    local event = event_persist:new()
     for _, script in pairs(pulp.scripts) do
         -- ensure 'any' exists
         script.any = script.any or function(...) end
     end
+    local event = event_persist:new()
     for _, script in pairs(pulp.scripts) do
         ;(script.load or script.any)(script, nil, event, "load")
     end
     pulp.game_is_loaded = true
 end
 
-
 function pulp:exitRoom()
     local event = event_persist:new()
     pulp:emit("exit", event)
+    pulp:savestore()
     
     -- save tiles
     -- TODO: dirty cache?
@@ -1162,21 +1199,43 @@ function pulp:start()
     pulp.player.ttype = TTYPE_PLAYER
     pulp.player.fps = pulp.player.tile.fps
     pulp.player.fps_lookup_idx = pulp.player.tile.fps_lookup_idx
+    
     pulp.roomStart = true
     pulp.roomQueued = nil
+    pulp.roomQueuedX = nil
+    pulp.roomQueuedY = nil
     pulp.restart = false
     pulp.listen = true
-    -- TODO: reset variables
-    pulp:enterRoom(pulp.startroom)
+    
+    -- run load event (yes, load is run on start, not just on load)
+    local event = event_persist:new()
+    for _, script in pairs(pulp.scripts) do
+        ;(script.load or script.any)(script, nil, event, "load")
+    end
+    pulp.game_is_loaded = true
+    
+    -- reset rooms to have their starting tiles
+    for _, room in pairs(pulp.rooms) do
+        room.tiles = copytable(room.tiles_init)
+    end
+    
+    if pulp.roomQueuedX and pulp.roomQueuedY then
+        pulp.player.x = pulp.roomQueuedX
+        pulp.player.y = pulp.roomQueuedY
+    end
+    pulp:enterRoom(pulp.roomQueued or pulp.startroom)
+    
+    pulp.frame = 0
 end
 
 function pulp:emit(evname, event)
+    assert(event ~= pulp.player)
     -- FIXME: what if evname starts with "__"?
     ;(pulp.gameScript[evname] or pulp.gameScript.any)(pulp.gameScript, pulp.game, event, evname)
     
     local roomScript = pulp:getCurrentRoom().script
-    assert(roomScript.any)
     if roomScript then
+        assert(roomScript.any);
         (roomScript[evname] or roomScript.any)(roomScript, pulp:getCurrentRoom(), event, evname)
     end
     
@@ -1198,7 +1257,6 @@ function pulp:emit(evname, event)
     if playerScript then
         event.x = pulp.player.x
         event.y = pulp.player.y
-        assert(pulp.player.tile)
         event.tile = pulp.player.tile.name
         ;(playerScript[evname] or playerScript.any)(playerScript, pulp.player, event, evname)
     end
@@ -1215,6 +1273,17 @@ function pulp:forTiles(tid, cb)
     end
 end
 
+function pulp:loadstore()
+    
+    pulp.store_dirty = false
+end
+
+function pulp:savestore()
+    if pulp.store_dirty then
+        
+    end
+    pulp.store_dirty = false
+end
 
 -- EVENTS TODO:
 -- finish [game]
@@ -1315,16 +1384,43 @@ function pulp.__fn_draw(x, y, tid)
     end
 end
 
-function pulp.__fn_restore(...)
-    -- todo
+function pulp.__fn_restore(name)
+    if name == nil then
+        for _name in pairs(pulp.store) do
+            local v = pulp.store[_name]
+            if type(v) ~= "table" then
+                pulp.setvariable(_name, v)
+            end
+        end
+    else
+        assert(type(name) == "string")
+        if pulp.store[name] then
+            local v = pulp.store[_name]
+            if type(v) ~= "table" then
+                pulp.setvariable(name, v)
+            end
+        end
+    end
 end
 
-function pulp.__fn_store(...)
-    -- todo
+function pulp.__fn_store(name)
+    assert(type(name) == "string")
+    local value = pulp.getvariable(name)
+    if type(value) ~= "table" then
+        pulp.store[name] = value
+    end
+    pulp.store_dirty = true
 end
 
-function pulp.__fn_toss(...)
-    -- todo
+function pulp.__fn_toss(name)
+    if name == nil then
+        pulp.store = {}
+        pulp.store_dirty = true
+    else
+        assert(type(name) == "string")
+        pulp.store[name] = nil
+        pulp.store_dirty = true
+    end
 end
 
 function pulp.__fn_wait(self, actor, event, evname, block, duration)
@@ -1350,8 +1446,6 @@ function pulp.__fn_say(x,y,w,h, self, actor, event, evname, block,text)
     
     w = max(w, 1)
     h = max(h, 1)
-    
-    print(block)
     
     pulp.message = {
         x = x,
@@ -1428,7 +1522,7 @@ end
 pulp.__fn_ask = pulp.__fn_say
 
 function pulp.__fn_fin(text)
-    pulp.__fn_say(nil, nil, nil, nil, nil, nil, nil, function()
+    pulp.__fn_say(nil, nil, nil, nil, nil, nil, nil, nil, function()
         pulp.restart = true
     end, text)
     
@@ -1533,9 +1627,11 @@ function pulp.__fn_goto(x, y, room)
         
         -- oddly, the reference implementation seems to do this:
         local playerScript = pulp:getPlayerScript()
-        if playerScript then
+        stackdepth += 1
+        if playerScript and not preventStackOverflow() then
             (playerScript.update or playerScript.any)(playerScript, player, event_persist:new(), "update")
         end
+        stackdepth -= 1
     end
 end
 
@@ -1650,9 +1746,19 @@ function pulp.__ex_name(id)
     end
 end
 
-function pulp.__ex_type(...)
-    -- TODO
-    return 2
+function pulp.__ex_type(x, y, id)
+    if x or y then
+        if x >= 0 and x < TILESW and y >= 0 and y < TILESH then
+            return roomtiles[y][x].tile.type
+        end
+    else
+        local tile = pulp:getTile(id)
+        if tile then
+            return tile.type
+        end
+    end
+    
+    return 0
 end
 
 -- TODO: inline this
