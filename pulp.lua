@@ -934,11 +934,15 @@ function playdate.update()
                                 actor = tilei.play_actor,
                             }
                             tilei.play_block = nil
+                            framei = #frames - 1
                         end
                     elseif tilei.fps > 0 then -- [[CAN STATICALLY OPTIMIZE OUT]]
                         framei = pulp_tile_fps_lookup_floor[tilei.fps_lookup_idx]
                         tilei.frame = framei
+                    else
+                        framei = tilei.frame
                     end
+                        
                     
                     -- checks if changed
                     local frame = frames[framei + 1] or frames[1] or 1
@@ -969,14 +973,17 @@ function playdate.update()
                             actor = tilei.play_actor,
                         }
                         tilei.play_block = nil
+                        framei = #frames - 1
                     end
                 elseif tilei.fps > 0 then
                     framei = pulp_tile_fps_lookup_floor[tilei.fps_lookup_idx]
                     tilei.frame = framei
+                else
+                    framei = tilei.frame
                 end
                 
                 -- checks if changed
-                local frame = frames[tilei.frame + 1] or frames[1] or 1
+                local frame = frames[framei + 1] or frames[1] or 1
                 if tilei.prev_frame ~= frame then
                     tilei.prev_frame = frame
                     tilemap:setTileAtPosition(x+1, y+1, frame)
@@ -1357,6 +1364,8 @@ function pulp.__fn_play(self, actor, event, evname, block, id)
     actor.play_event = event
     actor.play_evname = evname
     actor.play_block = block
+    -- this is probably redundant but paranoia ok
+    actor.play_actor = actor
 end
 
 local font_lookup_character <const> = {}
