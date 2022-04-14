@@ -63,6 +63,7 @@ local FIREFOX_SOUND_COMPAT = true
     code += "local __roomtiles <const> = __pulp.roomtiles\n"
     code += "local __print <const> = print\n"
     code += "local __getTime <const> = playdate.getTime\n"
+    code += "local __getSecondsSinceEpoch <const> = playdate.getSecondsSinceEpoch\n"
     code += """local __fillrect <const> = playdate.graphics.fillRect
 local __setcolour <const> = playdate.graphics.setColor
 local __fillcolours <const> = {

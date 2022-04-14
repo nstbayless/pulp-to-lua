@@ -228,6 +228,8 @@ def remap_special_varname(varname, ctx):
         return "--[[(ampm)]] (__getTime().hour < 12 and \"am\" or \"pm\")"
     elif varname == "datetime.AMPM": #note: pulp-to-lua extension
         return "--[[(AMPM)]] (__getTime().hour < 12 and \"AM\" or \"PM\")  --[[(PTL-only?)]]"
+    elif varname == "datetime.timestamp":
+        return "__getSecondsSinceEpoch()"
         
         
     return varname
