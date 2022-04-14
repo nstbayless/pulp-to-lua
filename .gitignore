@@ -4,5 +4,6 @@ out/
 out-*/
 out.lua
 __pycache__
+*.zip
 
 !tests/test.json
