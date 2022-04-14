@@ -1087,10 +1087,6 @@ function pulp:loadSounds()
                 local max_time = j / steps_per_second
                 local destime = (sound.attack + sound.decay)
                 scale_factor = min(max_time/destime, 1)
-                
-                if sound.name == "move" then
-                    print(j, "scale factor", scale_factor)
-                end
             end
             
             local inst = playdate.sound.instrument.new()
@@ -1338,13 +1334,13 @@ function pulp:forTiles(tid, cb)
 end
 
 function pulp:loadstore()
-    
+    pulp.store = playdate.datastore.read() or {}
     pulp.store_dirty = false
 end
 
 function pulp:savestore()
     if pulp.store_dirty then
-        
+        playdate.datastore.write(pulp.store)
     end
     pulp.store_dirty = false
 end
