@@ -322,7 +322,7 @@ for song in pulp["songs"]:
                     code += f"       {voice['release']},\n"
                 if 'sustain' in voice:
                     code += f"       {voice['sustain']},\n"
-                code += "    },"
+                code += "    },\n"
             else:
                 code += "    {},\n"
         code += "  },\n"
@@ -428,8 +428,8 @@ print(f"files written to {outpath}")
 # Generate pdxinfo file:
 # create path for launcher assets
 launcher_path = "launcher/"
-if not os.path.isdir(outpath + launcher_path):
-    os.mkdir(outpath + launcher_path)
+if not os.path.isdir(os.path.join(outpath,launcher_path)):
+    os.mkdir(os.path.join(outpath, launcher_path))
 
 # create pdxinfo file
 with open(os.path.join(outpath, "pdxinfo"), "w") as f:

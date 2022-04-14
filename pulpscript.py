@@ -137,7 +137,8 @@ funcargs = {
     "window": ["x", "y", "w", "h"],
     "fill": ["x", "y", "w", "h"],
     "crop": ["x", "y", "w", "h"],
-    "play": ["self", "actor", "event", "evname", "block"]
+    "play": ["self", "actor", "event", "evname", "block"],
+    "once": ["self", "actor", "event", "evname", "block"]
 }
 
 staticfuncs = {

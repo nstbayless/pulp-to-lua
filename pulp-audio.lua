@@ -254,7 +254,7 @@ local function getSong(value)
 		else 
 			songIdent = ' named "'..songName..'"'
 		end
-	elseif value then
+	else
 		local songId = value
 		local song = data.songs[songId+1]
 		if song then
@@ -318,6 +318,7 @@ end
 function startSong(value, once, callback)
 	local song = getSong(value)
 	if not song then
+		print("WARNING: attempt to play non-existent song '" .. tostring(value) .. "'")
 		return
 	end
 	local stream = streams[1]
