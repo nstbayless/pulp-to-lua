@@ -86,7 +86,7 @@ local EMPTY <const> = {
     any = function (...) end
 }
 pulp.EMPTY = {
-    any = function (...) end
+    any = EMPTY.any
 }
 pulp.EMPTY.script = pulp.EMPTY
 pulp.gameScript = EMPTY
@@ -337,7 +337,7 @@ end
 
 function pulp:getScriptEventByName(id, evname)
     local script = pulp:getScript(id) or EMPTY
-    return script[evname] or script.any or function(...) end
+    return script[evname] or script.any or EMPTY.any
 end
 
 function pulp:getScript(id)
@@ -859,7 +859,7 @@ local function readInput()
                             -- _script_any <- script.any, or if that's NOT SET BY USER (i.e. is EMPTY) then nil.
                             -- bad code. :|
                             local _script_any = _script.any
-                            if _script_any == EMPTY.any or _script_any == pulp.EMPTY.any then
+                            if _script_any == EMPTY.any then
                                 _script_any = nil
                             end
                             
@@ -1222,13 +1222,8 @@ function pulp:load()
     end
     for _, script in pairs(pulp.scripts) do
         -- ensure 'any' exists
-        script.any = script.any or function(...) end
+        script.any = script.any or EMPTY.any
     end
-    local event = event_persist:new()
-    for _, script in pairs(pulp.scripts) do
-        ;(script.load or script.any)(script, nil, event, "load")
-    end
-    pulp.game_is_loaded = true
 end
 
 function pulp:exitRoom()
@@ -1297,6 +1292,15 @@ function pulp:enterRoom(rid)
         pulp.__fn_loop(room.song)
     end
     
+    -- 'load' and 'start' events if not game is loaded etc.
+    if not pulp.game_is_loaded then
+        local event = event_persist:new()
+        for _, script in pairs(pulp.scripts) do
+            ;(script.load or script.any)(script, nil, event, "load")
+        end
+        pulp.game_is_loaded = true
+    end
+    
     if pulp.roomStart then
         -- 'start' event
         pulp.roomStart = false
@@ -1327,13 +1331,6 @@ function pulp:start()
     pulp.roomQueuedY = nil
     pulp.restart = false
     pulp.listen = true
-    
-    -- run load event (yes, load is run on start, not just on load)
-    local event = event_persist:new()
-    for _, script in pairs(pulp.scripts) do
-        ;(script.load or script.any)(script, nil, event, "load")
-    end
-    pulp.game_is_loaded = true
     
     -- reset rooms to have their starting tiles
     for _, room in pairs(pulp.rooms) do
