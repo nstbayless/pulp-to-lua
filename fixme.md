@@ -11,3 +11,6 @@ Also, they read new value of event.px/event.py/event.x/event.y if it changes.
 
     tell "tile" to
     tell tile-id to
+
+---
+__self is not needed, so we should remove it entirely.

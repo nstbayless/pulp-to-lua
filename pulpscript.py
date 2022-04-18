@@ -354,11 +354,11 @@ def op_call(cmd, ctx):
     global EVNAMECOUNTER
     if istoken(cmd[1]):
         fnstr = f"\"{cmd[1]}\""
-        callfn = f"__self.{cmd[1]}"
+        callfn = f"__actor.script.{cmd[1]}"
     else:
         fnstr = decode_rvalue(cmd[1], ctx)
-        callfn = f"__self[{fnstr}]"
-    return f";({callfn} or __self.any)(__self, __actor, event, {fnstr}) -- call {fnstr}"
+        callfn = f"__actor.script[{fnstr}]"
+    return f";({callfn} or __actor.script.any)(__self, __actor, event, {fnstr}) -- call {fnstr}"
         
 def op_emit(cmd, ctx):
     return f"__pulp:emit({decode_rvalue(cmd[1], ctx)}, event)"

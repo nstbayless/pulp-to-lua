@@ -854,11 +854,19 @@ local function readInput()
                             end
                             
                             local _type = ttile.ttype
-                            local _script = ttile.script or {}
+                            local _script = ttile.script or EMPTY
+                            
+                            -- _script_any <- script.any, or if that's NOT SET BY USER (i.e. is EMPTY) then nil.
+                            -- bad code. :|
+                            local _script_any = _script.any
+                            if _script_any == EMPTY.any or _script_any == pulp.EMPTY.any then
+                                _script_any = nil
+                            end
+                            
                             if _type == TTYPE_SPRITE and config.autoAct then
-                                (_script.interact or _script.any or default_event_interact)(ttile.script, ttile, event_persist:new(), "interact")
+                                (_script.interact or _script_any or default_event_interact)(ttile.script, ttile, event_persist:new(), "interact")
                             elseif _type == TTYPE_ITEM then
-                                (_script.collect or _script.any or default_event_collect)(ttile.script, ttile, event_persist:new(), "collect")
+                                (_script.collect or _script_any or default_event_collect)(ttile.script, ttile, event_persist:new(), "collect")
                             end
                         end
                     end
@@ -1056,6 +1064,9 @@ function playdate.update()
     -- execute elapsed timer events
     for i=1,#timers_activate do
         local timer = timers_activate[i]
+        assert(timer.actor)
+        assert(timer.self)
+        assert(timer.actor.script)
         timer.block(timer.self, timer.actor, timer.event, timer.evname)
     end
     
@@ -1183,7 +1194,7 @@ function pulp:load()
     pulp.loadstore()
     event_persist.game = pulp.game
     pulp.game.name = pulp.gamename
-    pulp.player.script = pulp:getScript(pulp.playerid) or {}
+    pulp.player.script = pulp:getScript(pulp.playerid) or EMPTY
     assert(pulp.player.script)
     pulp.tile_fps_lookup = {}
     pulp:loadSounds()
@@ -1273,7 +1284,7 @@ function pulp:enterRoom(rid)
             frames = tile.frames,
             play = false,
             solid = tile.solid,
-            script = tile.script,
+            script = tile.script or EMPTY,
             x = x,
             y = y,
             frame = 0
@@ -1339,36 +1350,48 @@ function pulp:start()
 end
 
 function pulp:emit(evname, event)
+    
+    local tasks = {}
+    
     assert(event ~= pulp.player)
-    -- FIXME: what if evname starts with "__"?
-    ;(pulp.gameScript[evname] or pulp.gameScript.any)(pulp.gameScript, pulp.game, event, evname)
+    
+    tasks[#tasks+1] = function()
+        ;(pulp.gameScript[evname] or pulp.gameScript.any)(pulp.gameScript, pulp.game, event, evname)
+    end
     
     local roomScript = pulp:getCurrentRoom().script
     if roomScript then
         assert(roomScript.any);
-        (roomScript[evname] or roomScript.any)(roomScript, pulp:getCurrentRoom(), event, evname)
+        tasks[#tasks+1] = function()
+            assert(roomScript.any);
+            (roomScript[evname] or roomScript.any)(roomScript, pulp:getCurrentRoom(), event, evname)
+        end
     end
     
     -- tiles
     for y = 0,TILESH-1 do
         for x = 0,TILESW-1 do
             local tileInstance = pulp:getTileAt(x, y)
-            if tileInstance.tile.script and tileInstance.tile.script[evname] then
-                event.x = x
-                event.y = y
-                event.tile = tileInstance.name
-                ;(tileInstance.tile.script[evname] or tileInstance.tile.script.any)(tileInstance.tile.script, tileInstance, event, evname)
+            local script = tileInstance.script
+            if script then
+                tasks[#tasks+1] = function()
+                    ;(script[evname] or script.any)(script, tileInstance, event, evname)
+                end
             end
         end
     end
     
     -- player
     local playerScript = pulp:getPlayerScript()
+    local player = pulp.player
     if playerScript then
-        event.x = pulp.player.x
-        event.y = pulp.player.y
-        event.tile = pulp.player.tile.name
-        ;(playerScript[evname] or playerScript.any)(playerScript, pulp.player, event, evname)
+        tasks[#tasks+1] = function()
+            ;(playerScript[evname] or playerScript.any)(playerScript, player, event, evname)
+        end
+    end
+    
+    for i = 1,#tasks do
+        tasks[i]()
     end
 end
 
@@ -1755,13 +1778,6 @@ function pulp.__fn_goto(x, y, room)
         player.x = x or player.x
         player.y = y or player.y
         
-        -- event_persist.px / py are cached.
-        -- it would seem like a good idea to update them here, but the reference
-        -- implementation does not do that, so we won't either.
-        --event_persist.px = x
-        --event_persist.py = y
-        -- (same thing with event.x and event.y)
-        
         -- oddly, the reference implementation seems to do this:
         local playerScript = pulp:getPlayerScript()
         stackdepth += 1
@@ -1815,7 +1831,7 @@ function pulp.__fn_swap(actor, newid)
             actor.tile = newtile
             actor.id = actor.tile.id
             if not actor.is_player then
-                actor.script = actor.tile.script
+                actor.script = actor.tile.script or EMPTY
             end
             actor.play = false
             actor.frames = newtile.frames
