@@ -3,11 +3,11 @@ assert(___pulp, "___pulp object must be defined before import")
 -- scale audio by this amount
 -- (we need to declare this before importing pulp-audio)
 SOUNDSCALE = {
-    [0] = 0.160, -- sine
-    [1] = 0.206, -- square
-    [2] = 0.150, -- sawtooth
-    [3] = 0.220, -- triangle
-    [4] = 0.080  -- noise
+    [0] = 0.320, -- sine
+    [1] = 0.412, -- square
+    [2] = 0.300, -- sawtooth
+    [3] = 0.440, -- triangle
+    [4] = 0.160  -- noise
 }
 
 import "CoreLibs/utilities/sampler"
@@ -73,6 +73,7 @@ pulp.shakey = 2
 pulp.exits = nil
 pulp.message = nil
 pulp.optattachmessage = nil
+local swapqueue = {}
 local disabled_exit_x = nil
 local disabled_exit_y = nil
 
@@ -908,6 +909,8 @@ function playdate.update()
     
     readAccelerometer()
     readInput() -- (and do player physics)
+    
+    pulp:processSwapQueue()
         
     local timers_activate = {}
     if not pulp.message then
@@ -1094,6 +1097,8 @@ function playdate.update()
             playdate.display.setOffset(random(-pulp.shakex, pulp.shakey), random(-pulp.shakex, pulp.shakey))
         end
     end
+    
+    pulp:processSwapQueue()
     
     -- clear blank frames
     if pulp.restart then
@@ -1296,7 +1301,18 @@ function pulp:enterRoom(rid)
     pulp:emit("enter", event_persist:new())
 end
 
+-- swaps occur now
+function pulp:processSwapQueue()
+    for i = 1,#swapqueue do
+        swapqueue[i].fn()
+    end
+    
+    -- clear queue
+    swapqueue = {} 
+end
+
 function pulp:start()
+    swapqueue = {}
     -- FIXME: just call pulp.__fn_swap() instead.
     pulp.player.x = pulp.startx
     pulp.player.y = pulp.starty
@@ -1350,8 +1366,8 @@ function pulp:emit(evname, event)
     end
     
     -- tiles
-    for x = 0,TILESW-1 do
-        for y = 0,TILESH-1 do
+    for y = 0,TILESH-1 do
+        for x = 0,TILESW-1 do
             local tileInstance = pulp:getTileAt(x, y)
             if tileInstance.tile.script and tileInstance.tile.script[evname] then
                 event.x = x
@@ -1432,15 +1448,23 @@ function pulp.__fn_sound(sid)
 end
 
 function pulp.__fn_play(self, actor, event, evname, block, id)
-    pulp.__fn_swap(actor, id)
-    actor.play = true
-    actor.frame = 0
-    actor.play_self = self
-    actor.play_event = event
-    actor.play_evname = evname
-    actor.play_block = block
-    -- this is probably redundant but paranoia ok
-    actor.play_actor = actor
+    if pulp.__fn_swap(actor, id) == false then
+        return
+    end
+    
+    local entry = swapqueue[#swapqueue]
+    local fn = entry.fn
+    entry.fn = function()
+        actor.play = true
+        actor.frame = 0
+        actor.play_self = self
+        actor.play_event = event
+        actor.play_evname = evname
+        actor.play_block = block
+        -- this is probably redundant but paranoia ok
+        actor.play_actor = actor
+        fn()
+    end
 end
 
 local font_lookup_character <const> = {}
@@ -1812,21 +1836,27 @@ function pulp.__fn_swap(actor, newid)
     if actor and actor.tile then
         local newtile = pulp:getTile(newid)
         if newtile then
-            actor.tile = newtile
-            actor.id = actor.tile.id
-            if not actor.is_player then
-                actor.script = actor.tile.script
-            end
-            actor.play = false
-            actor.frames = newtile.frames
-            actor.solid = actor.tile.solid
-            actor.name = actor.tile.name
-            actor.ttype = actor.tile.type
-            actor.fps = actor.tile.fps
-            actor.fps_lookup_idx = actor.tile.fps_lookup_idx
-            actor.frame = 0
+            swapqueue[#swapqueue + 1] = {
+                fn = function()
+                    actor.tile = newtile
+                    actor.id = actor.tile.id
+                    if not actor.is_player then
+                        actor.script = actor.tile.script
+                    end
+                    actor.play = false
+                    actor.frames = newtile.frames
+                    actor.solid = actor.tile.solid
+                    actor.name = actor.tile.name
+                    actor.ttype = actor.tile.type
+                    actor.fps = actor.tile.fps
+                    actor.fps_lookup_idx = actor.tile.fps_lookup_idx
+                    actor.frame = 0
+                end
+            }
+            return true
         else
             print("cannot swap to tile " .. newid)
+            return false
         end
     end
 end
