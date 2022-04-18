@@ -1292,16 +1292,14 @@ function pulp:enterRoom(rid)
         pulp.__fn_loop(room.song)
     end
     
-    -- 'load' and 'start' events if not game is loaded etc.
-    if not pulp.game_is_loaded then
+    if pulp.roomStart then
+        -- 'load' and 'start' events every time restart
         local event = event_persist:new()
         for _, script in pairs(pulp.scripts) do
-            ;(script.load or script.any)(script, nil, event, "load")
+            ;(script.load or script.any)(script, pulp:getScriptPrototype(script), event, "load")
         end
         pulp.game_is_loaded = true
-    end
     
-    if pulp.roomStart then
         -- 'start' event
         pulp.roomStart = false
         ;(game.start or game.any)(game, nil, event_persist:new(), "start")
@@ -1309,6 +1307,16 @@ function pulp:enterRoom(rid)
     
     -- 'enter' event
     pulp:emit("enter", event_persist:new())
+end
+
+-- returns a dummy actor with this given script
+-- used for when we would otherwise pass 'nil' as the actor field for an event handler.
+function pulp:getScriptPrototype(script)
+    assert(script)
+    return {
+        script = script,
+        any = EMPTY.any
+    }
 end
 
 function pulp:start()
@@ -1677,11 +1685,12 @@ end
 pulp.__fn_ask = pulp.__fn_say
 
 function pulp.__fn_fin(text)
-    pulp.__fn_say(nil, nil, nil, nil, nil, nil, nil, nil, function()
+    pulp.__fn_say(nil, nil, nil, nil, nil, {}, {}, {}, function()
         pulp.restart = true
     end, text)
     
     pulp.message.clear = true
+    pulp.message.is_finish = true
 end
 
 function pulp.__fn_window(x, y, w, h)
@@ -1809,7 +1818,7 @@ function pulp.__fn_tell(event, evname, block, actor)
     if type(actor) == "string" or type(actor) == "number" then
         local tile = pulp:getTile(actor)
         if tile then
-            block(tile.script, nil, event, evname)
+            block(tile.script, pulp:getScriptPrototype(tile.script), event, evname)
         else
             print("WARNING: `tell` command on invalid tile '" .. tostring(actor) .. '"')
         end
