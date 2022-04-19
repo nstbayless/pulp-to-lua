@@ -231,12 +231,18 @@ local function paginate(text, w, h)
                 pages[#pages+1] = ""
                 x = 0
                 y = 0
+                startidx = i
+                wordidx = i
+                wordx = 0
                 hook_line = true
                 hook_word = true
             elseif char == '\n' then
                 pages[#pages] = pages[#pages] .. trimLineEnd(substr(text, startidx, i - 1)) .. "\n"
                 x = 0
                 y += 1
+                startidx = i
+                wordidx = i
+                wordx = 0
                 hook_line = true
                 hook_word = true
             else
@@ -445,7 +451,7 @@ end
 
 local function default_event_collect(script, tilei, event, evname)
     local says = tilei.tile.says
-    pulp.setvariable(tilei.name .. "s", pulp.getvariable(tilei.name .. "s") + 1)
+    pulp.setvariable(tilei.name .. "s", (pulp.getvariable(tilei.name .. "s") or 0) + 1)
     pulp.__fn_swap(tilei, 0)
     if says then
         pulp.__fn_say(nil, nil, nil, nil, script, tilei, event, evname, nil, says)
@@ -1466,13 +1472,26 @@ function pulp:forTiles(tid, cb)
 end
 
 function pulp:loadstore()
-    pulp.store = playdate.datastore.read() or {}
-    pulp.store_dirty = false
+    local p, store = pcall(playdate.datastore.read)
+    if p and store then
+        pulp.store = store
+        pulp.store_dirty = false
+    else
+        print("Error loading store:")
+        print(store)
+    end
 end
 
 function pulp:savestore()
     if pulp.store_dirty then
-        playdate.datastore.write(pulp.store)
+        local p, err = pcall(
+            playdate.datastore.write,
+            pulp.store
+        )
+        if not p then
+            print("Error saving store:")
+            print(err)
+        end
     end
     pulp.store_dirty = false
 end
