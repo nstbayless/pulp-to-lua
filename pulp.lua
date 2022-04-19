@@ -185,74 +185,121 @@ end
 
 -- input: a string, height and width
 -- output: a list of strings, one for each 'page', each of which will fit in  w-by-h rectangle (as rendered with pulp.__fn_label)
+
+local function trimLineEnd(s)
+    return string.gsub(s, "%s*$", "")
+end
+
 local function paginate(text, w, h)
+    -- virtal cursor position
     local x = 0
     local y = 0
-    local startidx = 1
-    local wordidx = 1
+    
+    -- return value
     local pages = {""}
-    local in_embed = 0
+    
+    -- the index of the first character to include in this line.
+    local startidx = 1
+    
+    -- the index of the first character in the currently-processing word (or startidx if larger)
+    local wordidx = 1
+    local wordx = 0
+    
+    -- skip this many characters
+    local multichar = 0
+    
+    -- waiting to find start of word.
+    local hook_word = true
+    
+    -- waiting to find start of line.
+    local hook_line = true
+    
     for i = 1,#text+1 do
         if i == #text+1 then
-            pages[#pages] = pages[#pages] .. substr(text,startidx, #text)
+            -- finish with text[startidx:]
+            pages[#pages] = pages[#pages] .. trimLineEnd(substr(text, startidx, #text))
         else
-            local char = substr(text, i, i)
-            local chbyte = string_byte(text, i, i)
-            if chbyte < 0x80 then
-                in_embed = 0
-            end
-            if char == "\n" or char == "\f" then
-                pages[#pages] = pages[#pages] .. substr(text, startidx, i)
-                startidx = i + 1
-                wordidx = i + 1
-                y += 1
-                x = 0
-                if char == "\f" then
-                    pages[#pages + 1] = ""
-                    y = 0
-                end
-            elseif char == " " or char == "\t" then
-                x += 1
-                wordidx = i + 1
-            elseif chbyte >= 0x80 then
-                if in_embed <= 0 then
-                    x += 1
-                    in_embed = chbyte - 0x80 -- embed header is number of bytes encoding embed
-                else
-                    in_embed -= 1 
-                end
-            else
-                x += 1
+            if multichar > 0 then
+                multichar -= 1
+                goto continue
             end
             
-            if x >= w then
-                if startidx < wordidx then
-                    pages[#pages] = pages[#pages] .. substr(text,startidx, wordidx - 1) .. "\n"
-                    pages[#pages] = pages[#pages] .. substr(text, wordidx, i - 1)
-                    wordidx = 0
-                else
-                    pages[#pages] = pages[#pages] .. substr(text,startidx, i - 1) .. "\n"
-                    wordidx = i
-                end
+            local char = substr(text, i, i)
+            
+            if char == '\f' then
+                pages[#pages] = pages[#pages] .. trimLineEnd(substr(text, startidx, i - 1))
+                pages[#pages+1] = ""
+                x = 0
+                y = 0
+                hook_line = true
+                hook_word = true
+            elseif char == '\n' then
+                pages[#pages] = pages[#pages] .. trimLineEnd(substr(text, startidx, i - 1)) .. "\n"
                 x = 0
                 y += 1
-                startidx = i
+                hook_line = true
+                hook_word = true
+            else
+                local chbyte = string_byte(text, i, i)
+                local isspace = (char == ' ' or char == '\t')
+                
+                --[[print(
+                    tostring(x) .. "/" .. tostring(w),
+                    tostring(y) .. "/" .. tostring(h), char
+                )]]
+                
+                if x >= w then
+                    local cut_point = i
+                    if wordidx > startidx then
+                        cut_point = wordidx
+                        x -= wordx - 1
+                    else
+                        x = 0
+                    end
+                    
+                    local cutline = trimLineEnd(substr(text, startidx, cut_point - 1))
+                    pages[#pages] = pages[#pages] .. cutline .. "\n"
+                    startidx = cut_point
+                    wordidx = cut_point
+                    wordx = 0
+                    y += 1
+                    if y >= h then
+                        y = 0
+                        pages[#pages+1] = ""
+                    end
+                else
+                    x += 1
+                end
+                
+                if hook_line then
+                    startidx = i
+                end
+                
+                if hook_word then
+                    wordidx = i
+                    wordx = x
+                end
+                
+                if not isspace then
+                    hook_line = false
+                    hook_word = false
+                else
+                    hook_word = true
+                end
+                
+                -- read embeds
+                if chbyte >= 0x80 then
+                    multichar = chbyte - 0x80
+                end
             end
-            if y >= h then
-                y = 0
-                pages[#pages + 1] = ""
-            end
+            
+            ::continue::
         end
     end
     
+    -- remove empty final page
     if pages[#pages] == "" then
         pages[#pages] = nil
-    end
-    
-    -- strip lines on each page after the fact
-    -- FIXME: should strip above for correct behaviour
-    for i = 1,#pages do
-        pages[i] = string.gsub(pages[i], " *\n *", "\n")
     end
     
     return pages
@@ -359,7 +406,7 @@ function pulp:getCurrentRoom()
 end
 
 function pulp:getPlayerScript()
-    return pulp.player.script
+    return pulp.player.script or EMPTY
 end
 
 function pulp:getTile(tid)
@@ -664,9 +711,9 @@ local function drawMessage(message, submenu)
             end
             local option = message.options[i]
             local text = option.text
-            if not pulp.halfiwdth and #text > optw then
+            if not pulp.halfwidth and #text > optw then
                 text = substr(text, 1, optw)
-            elseif pulp.halfiwdth and #text > optw * 2 then
+            elseif pulp.halfwidth and #text > optw * 2 then
                 text = substr(text, 1, optw * 2)
             end
             pulp.__fn_label(optx, opty + y, nil, nil, text)
@@ -1264,26 +1311,32 @@ function pulp:enterRoom(rid)
     __exits = room.exits
     
     -- set tiles
-    for i, tid in ipairs(room.tiles) do
-        local y = floor((i-1) / TILESW)
-        local x = (i-1) % TILESW
-        local tile = pulp.tiles[tid]
-        roomtiles[y][x] = {
-            id = tid,
-            name = tile.name,
-            type = ACTOR_TYPE_TILE,
-            ttype = tile.type,
-            tile = tile,
-            fps = tile.fps,
-            fps_lookup_idx = tile.fps_lookup_idx,
-            frames = tile.frames,
-            play = false,
-            solid = tile.solid,
-            script = tile.script or EMPTY,
-            x = x,
-            y = y,
-            frame = 0
-        }
+    for y = 0,TILESH-1 do
+        for x = 0,TILESW-1 do
+            local tid = room.tiles[y * TILESW + x + 1]
+            assert(tid, "entering room prototype has missing tile entry")
+            local tile = pulp.tiles[tid]
+            assert(tile, "tile not found: " .. tostring(tid) .. " in entering room at location " .. tostring(x) .. "," .. tostring(y))
+            
+            local tilei = {
+                id = tid,
+                name = tile.name,
+                type = ACTOR_TYPE_TILE,
+                ttype = tile.type,
+                tile = tile,
+                fps = tile.fps,
+                fps_lookup_idx = tile.fps_lookup_idx,
+                frames = tile.frames,
+                play = false,
+                solid = tile.solid,
+                script = tile.script or EMPTY,
+                x = x,
+                y = y,
+                frame = 0
+            }
+            assert(tilei.script and tilei.script.any, "tile " .. tostring(tile.name) .. " malformed sript")
+            roomtiles[y][x] = tilei
+        end
     end
     
     if room.song == -2 then
@@ -1379,6 +1432,7 @@ function pulp:emit(evname, event)
             local tileInstance = pulp:getTileAt(x, y)
             local script = tileInstance.script
             if script then
+                assert(script.any)
                 tasks[#tasks+1] = function()
                     ;(script[evname] or script.any)(script, tileInstance, event, evname)
                 end

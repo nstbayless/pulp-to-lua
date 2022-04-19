@@ -148,7 +148,7 @@ for data in uniqueimagelist:
 print("done.")
 # scripts
 
-def getScriptName(type, id):
+def getScriptNameBase(type, id):
     if type == 0 and id == 0:
         return "game"
     elif type == 1 and id < len(pulp["rooms"]):
@@ -158,6 +158,16 @@ def getScriptName(type, id):
     
     ctx.errors += [f"unknown script, type {type}, id {id}"]
     return f"__UNKNOWN_SCRIPT_{type}_{id}"
+    
+scriptnames = set()
+def getScriptName(type, id):
+    s = getScriptNameBase(type, id)
+    
+    #ensure unique
+    while s in scriptnames:
+        s = f"_{type}_{id}_{s}"
+    scriptnames.add(s)
+    return s
 
 class Script:
     def __init__(self, id, type) -> None:
