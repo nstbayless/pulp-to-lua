@@ -555,8 +555,8 @@ def transpile_commands(commands, ctx, has_funccache=False):
         ctx.pop_funccache()
     return s
         
-def transpile_event(evobj, evname, ctx, blockidx):
-    _evobj = f"__pulp:getScript(\"{evobj}\")"
+def transpile_event(evobj, evname, ctx, blockidx, evobjname=None):
+    _evobj = f"__pulp:getScript(\"{evobj}\")" # evobjname would be faster, but less clear.
     if istoken(evname):
         s = f"{_evobj}.{evname} = function(__self, __actor, event, __evname)\n"
     else:
@@ -564,7 +564,8 @@ def transpile_event(evobj, evname, ctx, blockidx):
     
     block = ctx.blocks[blockidx]
     
-    ctx.push_evobj(_evobj)
+    #ctx.push_evobj(_evobj)
+    ctx.push_evobj(evobjname if evobjname else _evobj)
     cmdstr = transpile_commands(ctx.blocks[blockidx], ctx, True)
     ctx.pop_evobj()
     

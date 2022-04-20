@@ -84,6 +84,7 @@ local __fillcolours <const> = {
     white = playdate.graphics.kColorWhite
 }
 local __pix8scale = __pulp.pix8scale
+local __EVOBJ__ <const> = {}
 """
     return code
     
@@ -169,22 +170,28 @@ def getScriptName(type, id):
     scriptnames.add(s)
     return s
 
+evobjid = 1
+
 class Script:
     def __init__(self, id, type) -> None:
+        global evobjid
         self.id = id
         self.type = type
         self.code = ""
         self.name = getScriptName(type, id)
+        self.evobjid = f"__EVOBJ__[{evobjid}]"
+        evobjid += 1
         
-        self.code += f"\n----------------- {self.name} ----------------------------\n"
-        self.code += f"__pulp:newScript(\"{self.name}\")"
+        self.code += f"\n----------------- {self.name} ----------------------------\n\n"
+        self.code += f"__pulp:newScript(\"{self.name}\")\n"
+        self.code += f"{self.evobjid} = __pulp:getScript(\"{self.name}\")\n"
         self.code += f"__pulp:associateScript(\"{self.name}\", \"{scripttypes[self.type]}\", {self.id})"
         
         self.code += "\n"
     
     def addEvent(self, key, blocks, blockidx):
         ctx.blocks = blocks
-        self.code += "\n" + transpile_event(self.name, key, ctx, blockidx)
+        self.code += "\n" + transpile_event(self.name, key, ctx, blockidx, self.evobjid)
 
 code = startcode()
 
