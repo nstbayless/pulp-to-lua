@@ -374,6 +374,9 @@ def op_call(cmd, ctx):
     # actor's script.
     # ctx.get_funccache().add(f"local __evobj = {ctx.get_evobj()}")
     
+    if ctx.get_evobj() == "__self":
+        ctx.get_funccache().add(f"local __self = {ctx.root_evobj} --[this script]")
+    
     if istoken(cmd[1]):
         fnstr = f"\"{cmd[1]}\""
         callfn = f"{ctx.get_evobj()}.{cmd[1]}"
@@ -406,7 +409,7 @@ def op_mimic(cmd, ctx):
 def op_tell(cmd, ctx):
     if type(cmd[1]) == list and cmd[1][0] == "xy":
         # inline version of 'tell x,y to'
-        s = "do --tell x,y to\n"
+        s = "do --[tell x,y to]\n"
         ctx.indent += 1
         assert cmd[2][0] == "block"
         s += ctx.gi() + f"local __actor = __roomtiles[{decode_rvalue(cmd[1][2], ctx)}][{decode_rvalue(cmd[1][1], ctx)}]\n"
@@ -425,7 +428,7 @@ def op_tell(cmd, ctx):
         target = cmd[1][1]
         if target == "event.player":
             target = "__pulp.player"
-        s = f"do --tell {target} to\n"
+        s = f"do --[tell {target} to]\n"
         ctx.indent += 1
         assert cmd[2][0] == "block"
         s += ctx.gi() + f"local __actor = {target}\n"
@@ -497,6 +500,26 @@ def opex_func(cmd, op, prefix, ctx):
 
 def op_inc(cmd, operator, ctx):
     return cmd[1] + operator
+    
+def comment(cmd, prevline, ctx):
+    s = "--"
+    idx = cmd[1]
+    comment = "<comment missing>"
+    if idx < len(ctx.comments_block):
+        comment = ctx.comments_block[idx]
+    if "\n" in comment:
+        s += "[["
+    
+    if prevline:
+        s += "^"
+        
+    s += comment
+        
+    if "\n" in comment:
+        s += "]]"
+        
+    return s
+        
 
 def transpile_command(cmd, ctx):
     op = cmd[0]
@@ -533,10 +556,8 @@ def transpile_command(cmd, ctx):
         return ctx.gi() + op_tell(cmd, ctx) + "\n"
     elif op in funclist:
         return ctx.gi() + opex_func(cmd, op, "__fn_", ctx) + "\n"
-    elif op == "#":
-        return f"{ctx.gi()}--(comment omitted)\n"
-    elif op == "#$":
-        return f"{ctx.gi()}--(previous-line comment omitted)\n"
+    elif op in ["#", "#$"]:
+        return ctx.gi() + comment(cmd, op == "#$", ctx) + "\n"
     else:
         ctx.errors += ["unknown command code: " + op]
         return ctx.gi() + f"--unknown command code '{op}'\n"
@@ -554,7 +575,7 @@ def transpile_commands(commands, ctx, has_funccache=False):
         ctx.pop_funccache()
     return s
         
-def transpile_event(evobj, evname, ctx, blockidx, evobjname=None):
+def transpile_event(evobj, evname, ctx, blockidx, evobjname, comments_block):
     _evobj = f"__pulp:getScript(\"{evobj}\")" # evobjname would be faster, but less clear.
     if istoken(evname):
         s = f"{_evobj}.{evname} = function(__actor, event, __evname)\n"
@@ -563,8 +584,9 @@ def transpile_event(evobj, evname, ctx, blockidx, evobjname=None):
     
     block = ctx.blocks[blockidx]
     
-    #ctx.push_evobj(_evobj)
-    ctx.push_evobj(evobjname if evobjname else _evobj)
+    ctx.comments_block = comments_block
+    ctx.push_evobj("__self")
+    ctx.root_evobj = evobjname if evobjname else _evobj
     cmdstr = transpile_commands(ctx.blocks[blockidx], ctx, True)
     ctx.pop_evobj()
     

@@ -189,9 +189,9 @@ class Script:
         
         self.code += "\n"
     
-    def addEvent(self, key, blocks, blockidx):
+    def addEvent(self, key, blocks, blockidx, commentsblockidx):
         ctx.blocks = blocks
-        self.code += "\n" + transpile_event(self.name, key, ctx, blockidx, self.evobjid)
+        self.code += "\n" + transpile_event(self.name, key, ctx, blockidx, self.evobjid, commentsblockidx)
 
 code = startcode()
 
@@ -354,7 +354,7 @@ for pulpscript in pulp["scripts"]:
             if not key.startswith("__"):
                 assert pulpscript["data"][key][0] == "block"
                 blockidx = pulpscript["data"][key][1]
-                script.addEvent(key, pulpscript["data"]["__blocks"], blockidx)
+                script.addEvent(key, pulpscript["data"]["__blocks"], blockidx, pulpscript["data"]["__comments"])
     code += script.code
     LuaOut.scripts.append(script)
 
