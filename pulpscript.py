@@ -38,6 +38,7 @@ class PulpScriptContext:
         else:
             return varname
         
+    # get-indent.
     def gi(self):
         return "  "*self.indent
         
@@ -357,13 +358,17 @@ def op_block(cmd, statement, follow, end, ctx):
 
 def op_call(cmd, ctx):
     global EVNAMECOUNTER
+    
+    # NOTE: it's important that we use '__self' here, as *mimic* calls do not call back virtually to the original
+    # actor's script.
+    
     if istoken(cmd[1]):
         fnstr = f"\"{cmd[1]}\""
-        callfn = f"__actor.script.{cmd[1]}"
+        callfn = f"__self.{cmd[1]}"
     else:
         fnstr = decode_rvalue(cmd[1], ctx)
-        callfn = f"__actor.script[{fnstr}]"
-    return f";({callfn} or __actor.script.any)(__self, __actor, event, {fnstr}) -- call {fnstr}"
+        callfn = f"__self[{fnstr}]"
+    return f";({callfn} or __self.any)(__self, __actor, event, {fnstr}) -- call {fnstr}"
         
 def op_emit(cmd, ctx):
     return f"__pulp:emit({decode_rvalue(cmd[1], ctx)}, event)"
@@ -372,14 +377,19 @@ def op_mimic(cmd, ctx):
     if optimize_name_ref(cmd, 1) or type(cmd[1]) == int:
         s = f"do -- (mimic)\n"
         ctx.indent += 1
-        s += ctx.gi() + f"local __mimic_target__ = (__pulp.tiles[{decode_rvalue(cmd[1], ctx)}] or __pulp.EMPTY).script or __pulp.EMPTY;\n"
-        s += ctx.gi() + "(__mimic_target__[__evname] or __mimic_target__.any)(__self, __actor, event, __evname)\n"
+        s += ctx.gi() + f"local __mimic_target__ = (__pulp.tiles[{decode_rvalue(cmd[1], ctx)}] or __pulp.EMPTY).script;\n"
+        s += ctx.gi() + "(__mimic_target__[__evname] or __mimic_target__.any)(__mimic_target__, __actor, event, __evname)\n"
         ctx.indent -= 1
         s += ctx.gi() + "end"
         return s
     else:
-        s = f"__pulp:getScriptEventByName({decode_rvalue(cmd[1], ctx)}, __evname)"
-        return s + "(__self, __actor, event, __evname) -- (mimic)"
+        s = "do -- (mimic)\n"
+        ctx.indent += 1
+        s += ctx.gi() + f"local __mimic_target__ = __pulp:getScript({decode_rvalue(cmd[1], ctx)}) or __pulp.EMPTY;\n"
+        s += ctx.gi() + f"(__mimic_target__[__evname] or __mimic_target__.any)(__mimic_target__, __actor, event, __evname)\n"
+        ctx.indent -= 1
+        s += ctx.gi() + "end"
+        return s
     
 def op_tell(cmd, ctx):
     if type(cmd[1]) == list and cmd[1][0] == "xy":

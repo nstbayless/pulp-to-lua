@@ -351,7 +351,8 @@ for pulpscript in pulp["scripts"]:
     code += script.code
     LuaOut.scripts.append(script)
 
-if len(ctx.full_mimics) > 0:
+# breaks mimics actually...
+if False and len(ctx.full_mimics) > 0:
     code += "\n-- full mimics\n"
     code += "for _=1,5 do\n"
     for full_mimic in ctx.full_mimics:
