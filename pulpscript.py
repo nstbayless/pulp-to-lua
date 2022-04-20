@@ -167,6 +167,10 @@ def istoken(s):
         return False
     if "-" in s:
         return False
+    if len(s) == 0:
+        return False
+    if s[0] in "0123456789":
+        return False
     return True
 
 tile_ids = dict() # populated in pulplua.py
@@ -192,10 +196,10 @@ def remap_special_varname(varname, ctx):
         ctx.get_funccache().add("local __event_py = __pulp.player.y")
         return "__event_py"
     elif varname == "event.x":
-        ctx.get_funccache().add("local __event_x = __actor.x or 0")
+        ctx.get_funccache().add("local __event_x = __actor.x or __pulp.player.x")
         return "__event_x"
     elif varname == "event.y":
-        ctx.get_funccache().add("local __event_y = __actor.y or 0")
+        ctx.get_funccache().add("local __event_y = __actor.y or __pulp.player.y")
         return "__event_y"
     elif varname == "event.dx":
         ctx.get_funccache().add("local __event_dx = event.dx or 0")

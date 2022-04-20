@@ -45,8 +45,8 @@ pulp.store_dirty = false
 local roomtiles = pulp.roomtiles
 pulp.rooms = pulp.rooms or {}
 pulp.game = {
-    script = nil,
-    name = nil,
+    script = EMPTY,
+    name = "",
     type = ACTOR_TYPE_GLOBAL,
     __tostring = function(...)
         return pulp.gamename
@@ -308,6 +308,10 @@ local function paginate(text, w, h)
         pages[#pages] = nil
     end
     
+    if #pages == 0 then
+        pages[1] = ""
+    end
+    
     return pages
 end
 
@@ -444,7 +448,7 @@ function pulp:getTileAt(x, y)
 end
 
 local function default_event_interact(script, tilei, event, evname)
-    if tilei.tile.says then
+    if tilei.tile.says and #tilei.tile.says > 0 then
         pulp.__fn_say(nil, nil, nil, nil, script, tilei, event, evname, nil, tilei.tile.says)
     end
 end
@@ -453,7 +457,7 @@ local function default_event_collect(script, tilei, event, evname)
     local says = tilei.tile.says
     pulp.setvariable(tilei.name .. "s", (pulp.getvariable(tilei.name .. "s") or 0) + 1)
     pulp.__fn_swap(tilei, 0)
-    if says then
+    if says and #says > 0 then
         pulp.__fn_say(nil, nil, nil, nil, script, tilei, event, evname, nil, says)
     end
 end
@@ -684,9 +688,8 @@ local function drawMessage(message, submenu)
             playdate.graphics.clear(playdate.graphics.kColorBlack)
         end
         
-        if message.text then
+        if message.text and message.page and message.text[message.page] then
             pulp.__fn_window(message.x-1, message.y-1, message.w+2, message.h+2)
-            
             local text = substr(message.text[message.page], 1, message.textidx)
             pulp.__fn_label(message.x, message.y, nil, nil, text)
             
@@ -1361,7 +1364,7 @@ function pulp:enterRoom(rid)
     
         -- 'start' event
         pulp.roomStart = false
-        ;(game.start or game.any)(game, nil, event_persist:new(), "start")
+        ;(pulp.game.script.start or pulp.game.script.any)(game, nil, event_persist:new(), "start")
     end
     
     -- 'enter' event
@@ -1675,7 +1678,7 @@ function pulp.__fn_say(x,y,w,h, self, actor, event, evname, block,text)
     
     w = max(w, 1)
     h = max(h, 1)
-    
+        
     pulp.message = {
         x = x,
         y = y,
@@ -1697,6 +1700,9 @@ function pulp.__fn_say(x,y,w,h, self, actor, event, evname, block,text)
         block = block
     }
     
+    assert(pulp.message.text)
+    assert(pulp.message.text[1])
+    
     if block then
         assert(event, "ask block not given an event")
     end
@@ -1706,6 +1712,8 @@ function pulp.__fn_menu(x,y,w,h,self, actor, event, evname, block)
     x = x or 2
     y = y or 3
     assert(type(block) == "function")
+        
+    print("menu")
     
     pulp.message = {
         optx = x + 2,

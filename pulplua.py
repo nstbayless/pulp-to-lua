@@ -178,10 +178,6 @@ class Script:
         
         self.code += f"\n----------------- {self.name} ----------------------------\n"
         self.code += f"__pulp:newScript(\"{self.name}\")"
-        
-        if istoken(self.name):
-            self.code += "\n" + self.name + f" = __pulp:getScript(\"{self.name}\")"
-        
         self.code += f"__pulp:associateScript(\"{self.name}\", \"{scripttypes[self.type]}\", {self.id})"
         
         self.code += "\n"
