@@ -440,7 +440,6 @@ borderimage.save(os.path.join(outpath, "pipe-table-8-8.png"))
 fontimage.save(os.path.join(outpath, "font-table-8-8.png"))
 print(f"files written to {outpath}")
 
-# Generate pdxinfo file:
 # create path for launcher assets
 launcher_path = "launcher/"
 if not os.path.isdir(os.path.join(outpath,launcher_path)):
@@ -460,5 +459,54 @@ with open(os.path.join(outpath, "pdxinfo"), "w") as f:
     f.write("imagePath=" + launcher_path + "\n")
     f.write("launchSoundPath=" + launcher_path + "\n")
 print(f"pdxinfo saved to {outpath}")
+
+# generates launcher card from Pulpscript JSON and tilesheet
+def generate_launcher_card(pulp_json, tilesheet):
+    print("Generating launcher card...")
+    
+    # initialize launcher image
+    launcher_image = Image.new("1", (200, 120)) # create image sized to pulp resolution
+    
+    # locate launcher card info in pulp json can be found in the n-th element of the "rooms" array, where n is the value specified in the "card" key	 
+    print(f"launcher card room name: {pulp_json['rooms'][pulp_json['card']]['name']}")
+    launcher_card_tiles = pulp_json["rooms"][pulp_json["card"]]["tiles"]
+    
+    # populate launcher card image with tiles
+    tile_counter = 0
+    for y in range(15):
+        for x in range(25):
+            # get tile # from launcher_card_json
+            tile_num = launcher_card_tiles[tile_counter]
+          
+            # get first frame of specified tile
+            frame_number = pulp_json["tiles"][tile_num]["frames"][0]
+            
+            # get the number of the unique image list (necessary since the code is removing duplicate tiles from the tiles list)
+            h = hash(tuple( pulp_json["frames"][frame_number]["data"] ))
+            image_map_number = uniqueimagehashmap[h]      
+            
+            # get tile from tilesheet
+            tile = tilesheet.crop((0, image_map_number * 8, 8, image_map_number * 8 + 8)) # (left, upper, right, lower)
+            
+            # add tile to launcher card image at (x,y)
+            launcher_image.paste(im=tile, box=(x*8, y*8))
+            
+            tile_counter+=1
+    
+    
+    # NOTE: The card image at this point is 200 X 120 which is Pulp's full-screen resolution
+    
+    # resize image from Pulp's resolution (200 x 120) to standard Playdate resolution then crop to 350 x 155
+    resized_card = launcher_image.resize((400, 240))    
+    cropped_card = resized_card.crop((25, 42, 375, 197))
+
+    # save launcher image to  file
+    launcher_card_path = os.path.join(outpath, launcher_path, "card.png")    
+    cropped_card.save( launcher_card_path, "PNG" )
+    print(f"launcher card saved to {launcher_card_path}")
+    
+
+# generate launcher card
+generate_launcher_card(pulp, frame_img)
 
 print("build complete")
