@@ -354,6 +354,7 @@ for pulpscript in pulp["scripts"]:
 # breaks mimics actually...
 if False and len(ctx.full_mimics) > 0:
     code += "\n-- full mimics\n"
+    code += "\n-- this loop is optional, but it can improve performance by cutting corners on mimic calls\n"
     code += "for _=1,5 do\n"
     for full_mimic in ctx.full_mimics:
         evobj = full_mimic[0]
@@ -365,7 +366,7 @@ if False and len(ctx.full_mimics) > 0:
                 + f"__pulp:getScript(\"{evtarg}\").any\n"
         else:
             code += f"""
-for name, fn in pairs(__pulp:getScript(\"{evtarg}\")) do
+for name, fn in pairs(__pulp:getScript(\"{evtarg}\")) do -- (for 'any')
     if not __pulp:getScript(\"{evobj}\")[name] and type(fn) == "function" then
         __pulp:getScript(\"{evobj}\")[name] = fn
     end

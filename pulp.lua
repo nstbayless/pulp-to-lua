@@ -1930,6 +1930,7 @@ function pulp.__fn_swap(actor, newid)
             actor.frame = 0
         else
             print("cannot swap to tile " .. newid)
+            assert(false)
         end
     end
 end

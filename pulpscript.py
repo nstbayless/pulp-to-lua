@@ -15,6 +15,8 @@ class PulpScriptContext:
         # cache these at the start of each function
         self.funccache = []
         
+        self.evobjs = []
+        
     def push_funccache(self):
         self.funccache.append(set())
     
@@ -23,6 +25,15 @@ class PulpScriptContext:
     
     def get_funccache(self):
         return self.funccache[-1]
+        
+    def push_evobj(self, obj):
+        self.evobjs.append(obj)
+    
+    def pop_evobj(self):
+        self.evobjs = self.evobjs[:-1]
+    
+    def get_evobj(self):
+        return self.evobjs[-1]
         
     def pingvar(self, varname):
         if "." in varname:
@@ -361,14 +372,15 @@ def op_call(cmd, ctx):
     
     # NOTE: it's important that we use '__self' here, as *mimic* calls do not call back virtually to the original
     # actor's script.
+    ctx.get_funccache().add(f"local __evobj = {ctx.get_evobj()}")
     
     if istoken(cmd[1]):
         fnstr = f"\"{cmd[1]}\""
-        callfn = f"__self.{cmd[1]}"
+        callfn = f"__evobj.{cmd[1]}"
     else:
         fnstr = decode_rvalue(cmd[1], ctx)
-        callfn = f"__self[{fnstr}]"
-    return f";({callfn} or __self.any)(__self, __actor, event, {fnstr}) -- call {fnstr}"
+        callfn = f"__evobj[{fnstr}]"
+    return f";({callfn} or __evobj.any)(__evobj, __actor, event, {fnstr}) -- call {fnstr}"
         
 def op_emit(cmd, ctx):
     return f"__pulp:emit({decode_rvalue(cmd[1], ctx)}, event)"
@@ -400,8 +412,9 @@ def op_tell(cmd, ctx):
         s += ctx.gi() + f"local __actor = __roomtiles[{decode_rvalue(cmd[1][2], ctx)}][{decode_rvalue(cmd[1][1], ctx)}]\n"
         s += ctx.gi() + f"if __actor and __actor.tile then\n"
         ctx.indent += 1
-        s += ctx.gi() + f"local __self = __actor.script or __pulp.EMPTY\n"
+        ctx.push_evobj("__actor.script or __pulp.EMPTY")
         s += transpile_commands(ctx.blocks[cmd[2][1]], ctx, True)
+        ctx.pop_evobj()
         ctx.indent -= 1
         s += ctx.gi() + f"end\n"
         ctx.indent -= 1
@@ -418,8 +431,9 @@ def op_tell(cmd, ctx):
         s += ctx.gi() + f"local __actor = {target}\n"
         s += ctx.gi() + f"if __actor then\n"
         ctx.indent += 1
-        s += ctx.gi() + f"local __self = __actor.script or __pulp.EMPTY\n"
+        ctx.push_evobj("__actor.script or __pulp.EMPTY")
         s += transpile_commands(ctx.blocks[cmd[2][1]], ctx, True)
+        ctx.pop_evobj()
         ctx.indent -= 1
         s += ctx.gi() + f"end\n"
         ctx.indent -= 1
@@ -550,7 +564,9 @@ def transpile_event(evobj, evname, ctx, blockidx):
     
     block = ctx.blocks[blockidx]
     
+    ctx.push_evobj(_evobj)
     cmdstr = transpile_commands(ctx.blocks[blockidx], ctx, True)
+    ctx.pop_evobj()
     
     s += cmdstr
     s += "end\n"
@@ -563,5 +579,4 @@ def transpile_event(evobj, evname, ctx, blockidx):
         if type(mimic[1]) == list and mimic[1][0] == "optimized-id":
             mimic[1][2]
             ctx.full_mimics.append((evobj, evname, mimic[1][2]))
-    
     return s
