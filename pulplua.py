@@ -84,7 +84,7 @@ local __fillcolours <const> = {
     white = playdate.graphics.kColorWhite
 }
 local __pix8scale = __pulp.pix8scale
-local __EVOBJ__ <const> = {}
+local __script <const> = {}
 """
     return code
     
@@ -179,7 +179,7 @@ class Script:
         self.type = type
         self.code = ""
         self.name = getScriptName(type, id)
-        self.evobjid = f"__EVOBJ__[{evobjid}]"
+        self.evobjid = f"__script[{evobjid}]"
         evobjid += 1
         
         self.code += f"\n----------------- {self.name} ----------------------------\n\n"
