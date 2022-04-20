@@ -374,16 +374,30 @@ def op_call(cmd, ctx):
     # actor's script.
     # ctx.get_funccache().add(f"local __evobj = {ctx.get_evobj()}")
     
-    if ctx.get_evobj() == "__self":
-        ctx.get_funccache().add(f"local __self = {ctx.root_evobj} --[this script]")
-    
     if istoken(cmd[1]):
         fnstr = f"\"{cmd[1]}\""
         callfn = f"{ctx.get_evobj()}.{cmd[1]}"
     else:
         fnstr = decode_rvalue(cmd[1], ctx)
         callfn = f"{ctx.get_evobj()}[{fnstr}]"
-    return f";({callfn} or {ctx.get_evobj()}.any)(__actor, event, {fnstr}) -- call {fnstr}"
+        
+    fnbase = f";({callfn} or {ctx.get_evobj()}.any)"
+    
+    comment = f"--[call \"{fnstr}\"]"
+    
+    if ctx.get_evobj() == "__self":
+        ctx.get_funccache().add(f"local __self = {ctx.root_evobj} --[this script]")
+        
+        # simplification if we know the name of the function
+        if istoken(cmd[1]):
+            if cmd[1] in list(ctx.self_evnames):
+                fnbase = callfn
+                comment = ""
+            else:
+                fnbase = "__self.any"
+                comment += " [doesn't exist, so any]"
+    
+    return f"{fnbase}(__actor, event, {fnstr}) {comment}"
         
 def op_emit(cmd, ctx):
     return f"__pulp:emit({decode_rvalue(cmd[1], ctx)}, event)"
@@ -416,6 +430,7 @@ def op_tell(cmd, ctx):
         s += ctx.gi() + f"if __actor and __actor.tile then\n"
         ctx.indent += 1
         ctx.push_evobj("__actor.script")
+        assert ctx.get_evobj() != "__self"
         s += transpile_commands(ctx.blocks[cmd[2][1]], ctx, True)
         ctx.pop_evobj()
         ctx.indent -= 1
@@ -444,7 +459,10 @@ def op_tell(cmd, ctx):
         return s
     else:
         optimize_name_ref(cmd, 1)
-        return opex_func(cmd, "tell", "__fn_", ctx)
+        ctx.push_evobj("__actor.script")
+        s = opex_func(cmd, "tell", "__fn_", ctx)
+        ctx.pop_evobj()
+        return s
     
 def opex_func(cmd, op, prefix, ctx):
     mainargs = []
@@ -575,7 +593,7 @@ def transpile_commands(commands, ctx, has_funccache=False):
         ctx.pop_funccache()
     return s
         
-def transpile_event(evobj, evname, ctx, blockidx, evobjname, comments_block):
+def transpile_event(evobj, evname, ctx, blockidx, evobjname, comments_block, evnames):
     _evobj = f"__pulp:getScript(\"{evobj}\")" # evobjname would be faster, but less clear.
     if istoken(evname):
         s = f"{_evobj}.{evname} = function(__actor, event, __evname)\n"
@@ -584,6 +602,7 @@ def transpile_event(evobj, evname, ctx, blockidx, evobjname, comments_block):
     
     block = ctx.blocks[blockidx]
     
+    ctx.self_evnames = evnames
     ctx.comments_block = comments_block
     ctx.push_evobj("__self")
     ctx.root_evobj = evobjname if evobjname else _evobj

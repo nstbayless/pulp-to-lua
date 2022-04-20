@@ -188,10 +188,15 @@ class Script:
         self.code += f"__pulp:associateScript(\"{self.name}\", \"{scripttypes[self.type]}\", {self.id})"
         
         self.code += "\n"
+        
+        self.evnames = set()
     
     def addEvent(self, key, blocks, blockidx, commentsblockidx):
         ctx.blocks = blocks
-        self.code += "\n" + transpile_event(self.name, key, ctx, blockidx, self.evobjid, commentsblockidx)
+        self.code += "\n" + transpile_event(self.name, key, ctx, blockidx, self.evobjid, commentsblockidx, self.evnames)
+    
+    def markHasEvent(self, evname):
+        self.evnames.add(evname)
 
 code = startcode()
 
@@ -350,11 +355,15 @@ for pulpscript in pulp["scripts"]:
         continue
     script = Script(pulpscript["id"], pulpscript["type"])
     if "data" in pulpscript:
-        for key in pulpscript["data"]:
-            if not key.startswith("__"):
-                assert pulpscript["data"][key][0] == "block"
-                blockidx = pulpscript["data"][key][1]
-                script.addEvent(key, pulpscript["data"]["__blocks"], blockidx, pulpscript["data"]["__comments"])
+        for _pass in [0, 1]:
+            for key in pulpscript["data"]:
+                if not key.startswith("__"):
+                    assert pulpscript["data"][key][0] == "block"
+                    blockidx = pulpscript["data"][key][1]
+                    if _pass == 0:
+                        script.markHasEvent(key)
+                    elif _pass == 1:
+                        script.addEvent(key, pulpscript["data"]["__blocks"], blockidx, pulpscript["data"]["__comments"])
     code += script.code
     LuaOut.scripts.append(script)
 
