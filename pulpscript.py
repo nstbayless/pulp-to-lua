@@ -141,16 +141,16 @@ funcargs = {
     "label": ["x", "y", "len", "lines"],
     "draw": ["x", "y"],
     "solid": ["x", "y"],
-    "wait": ["self", "actor", "event", "evname", "block"],
-    "say": ["x", "y", "w", "h", "self", "actor", "event", "evname", "block"],
-    "ask": ["x", "y", "w", "h", "self", "actor", "event", "evname", "block"],
-    "menu": ["x", "y", "w", "h", "self", "actor", "event", "evname", "block"],
-    "option": ["self", "actor", "event", "evname", "block"],
+    "wait": ["actor", "event", "evname", "block"],
+    "say": ["x", "y", "w", "h", "actor", "event", "evname", "block"],
+    "ask": ["x", "y", "w", "h", "actor", "event", "evname", "block"],
+    "menu": ["x", "y", "w", "h", "actor", "event", "evname", "block"],
+    "option": ["actor", "event", "evname", "block"],
     "window": ["x", "y", "w", "h"],
     "fill": ["x", "y", "w", "h"],
     "crop": ["x", "y", "w", "h"],
-    "play": ["self", "actor", "event", "evname", "block"],
-    "once": ["self", "actor", "event", "evname", "block"],
+    "play": ["actor", "event", "evname", "block"],
+    "once": ["actor", "event", "evname", "block"],
     "type": ["x", "y"]
 }
 
@@ -280,7 +280,7 @@ def ex_embed(expression, ctx):
     return f"__pulp.__ex_embed({decode_rvalue(expression[1], ctx)})"
 
 def ex_subroutine(expression, ctx):
-    s = "function(__self, __actor, event, evname) assert(not __self)\n"
+    s = "function(__actor, event, evname)\n"
     ctx.indent += 2
     s += transpile_commands(ctx.blocks[expression[1]], ctx, True)
     ctx.indent -= 2
@@ -380,7 +380,7 @@ def op_call(cmd, ctx):
     else:
         fnstr = decode_rvalue(cmd[1], ctx)
         callfn = f"{ctx.get_evobj()}[{fnstr}]"
-    return f";({callfn} or {ctx.get_evobj()}.any)(__NIL, __actor, event, {fnstr}) -- call {fnstr}"
+    return f";({callfn} or {ctx.get_evobj()}.any)(__actor, event, {fnstr}) -- call {fnstr}"
         
 def op_emit(cmd, ctx):
     return f"__pulp:emit({decode_rvalue(cmd[1], ctx)}, event)"
@@ -390,7 +390,7 @@ def op_mimic(cmd, ctx):
         s = f"do -- (mimic)\n"
         ctx.indent += 1
         s += ctx.gi() + f"local __mimic_target__ = (__pulp.tiles[{decode_rvalue(cmd[1], ctx)}] or __pulp.EMPTY).script;\n"
-        s += ctx.gi() + "(__mimic_target__[__evname] or __mimic_target__.any)(__NIL, __actor, event, __evname)\n"
+        s += ctx.gi() + "(__mimic_target__[__evname] or __mimic_target__.any)(__actor, event, __evname)\n"
         ctx.indent -= 1
         s += ctx.gi() + "end"
         return s
@@ -398,7 +398,7 @@ def op_mimic(cmd, ctx):
         s = "do -- (mimic)\n"
         ctx.indent += 1
         s += ctx.gi() + f"local __mimic_target__ = __pulp:getScript({decode_rvalue(cmd[1], ctx)}) or __pulp.EMPTY;\n"
-        s += ctx.gi() + f"(__mimic_target__[__evname] or __mimic_target__.any)(__NIL, __actor, event, __evname)\n"
+        s += ctx.gi() + f"(__mimic_target__[__evname] or __mimic_target__.any)(__actor, event, __evname)\n"
         ctx.indent -= 1
         s += ctx.gi() + "end"
         return s
@@ -446,7 +446,6 @@ def op_tell(cmd, ctx):
 def opex_func(cmd, op, prefix, ctx):
     mainargs = []
     setargs = {
-        "self": "true",
         "actor": "__actor",
         "event": "event",
         "evname": "__evname",
@@ -558,9 +557,9 @@ def transpile_commands(commands, ctx, has_funccache=False):
 def transpile_event(evobj, evname, ctx, blockidx, evobjname=None):
     _evobj = f"__pulp:getScript(\"{evobj}\")" # evobjname would be faster, but less clear.
     if istoken(evname):
-        s = f"{_evobj}.{evname} = function(__self, __actor, event, __evname) assert(not __self)\n"
+        s = f"{_evobj}.{evname} = function(__actor, event, __evname)\n"
     else:
-        s = f"{_evobj}[\"{evname}\"] = function(__self, __actor, event, __evname) assert(not __self)\n"
+        s = f"{_evobj}[\"{evname}\"] = function(__actor, event, __evname)\n"
     
     block = ctx.blocks[blockidx]
     
