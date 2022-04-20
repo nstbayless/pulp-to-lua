@@ -467,21 +467,21 @@ function playdate.cranked(change, acceleratedChange)
     event_persist.aa = playdate.getCrankPosition()
     event_persist.ra = change
     if script then
-        (script.crank or script.any)(script, pulp.player, event_persist:new(), "crank")
+        (script.crank or script.any)(__NIL, pulp.player, event_persist:new(), "crank")
     end
 end
 
 function playdate.crankDocked()
     local script = pulp:getPlayerScript()
     if script then
-        (script.dock or script.any)(script, pulp.player, event_persist:new(), "dock")
+        (script.dock or script.any)(__NIL, pulp.player, event_persist:new(), "dock")
     end
 end
 
 function playdate.crankUndocked()
     local script = pulp:getPlayerScript()
     if script then
-        (script.undock or script.any)(script, pulp.player, event_persist:new(), "undock")
+        (script.undock or script.any)(__NIL, pulp.player, event_persist:new(), "undock")
     end
 end
 
@@ -546,7 +546,7 @@ local function updateMessage(up, down, left, right, confirm, cancel)
     if not message.showoptions and not message.text then
         if message.block then
             pulp.optattachmessage = message
-            message.block(message.self, message.actor, message.event, message.evname)
+            message.block(__NIL, message.actor, message.event, message.evname)
             pulp.optattachmessage = nil
             message.showoptions = true
             message.optselect = 1
@@ -619,7 +619,7 @@ local function updateMessage(up, down, left, right, confirm, cancel)
             -- dismiss message
             if option and option.block then
                 assert(option.event)
-                option.block(option.self, option.actor, option.event, option.evname, option)
+                option.block(__NIL, option.actor, option.event, option.evname, option)
                 
                 -- dismiss ALL menus if no submenu opened in option block
                 if pulp.message == message then
@@ -628,14 +628,14 @@ local function updateMessage(up, down, left, right, confirm, cancel)
                     message.dismiss = true
                 end
                 
-                (pulp.gameScript.select or pulp.gameScript.any)(pulp.gameScript, pulp.game, event_persist:new(), "select")
+                (pulp.gameScript.select or pulp.gameScript.any)(__NIL, pulp.game, event_persist:new(), "select")
             end
         elseif cancel then
             if pulp.message.previous or config.allowDismissRootMenu ~= 0 then
                 pulp.message = pulp.message.previous;
-                (pulp.gameScript.select or pulp.gameScript.any)(pulp.gameScript, pulp.game, event_persist:new(), "dismiss")
+                (pulp.gameScript.select or pulp.gameScript.any)(__NIL, pulp.game, event_persist:new(), "dismiss")
             else
-                (pulp.gameScript.select or pulp.gameScript.any)(pulp.gameScript, pulp.game, event_persist:new(), "invalid")
+                (pulp.gameScript.select or pulp.gameScript.any)(__NIL, pulp.game, event_persist:new(), "invalid")
             end
         end
     elseif message.textidx < #text and skiptext and message.sayAdvanceDelay <= 0 then
@@ -649,7 +649,7 @@ local function updateMessage(up, down, left, right, confirm, cancel)
             -- close the final page.
             if message.block then
                 pulp.optattachmessage = message
-                message.block(message.self, message.actor, message.event, message.evname)
+                message.block(__NIL, message.actor, message.event, message.evname)
                 pulp.optattachmessage = nil
                 message.block = nil
             end
@@ -849,10 +849,10 @@ local function readInput()
         local playerScript = pulp:getPlayerScript()
         if pulp.listen then
             if a_pressed and playerScript then
-                (playerScript.confirm or playerScript.any)(playerScript, pulp.player, event_persist:new(), "confirm")
+                (playerScript.confirm or playerScript.any)(__NIL, pulp.player, event_persist:new(), "confirm")
             end
             if b_pressed and playerScript then
-                (playerScript.cancel or playerScript.any)(playerScript, pulp.player, event_persist:new(), "cancel")
+                (playerScript.cancel or playerScript.any)(__NIL, pulp.player, event_persist:new(), "cancel")
             end
                 
             local do_exit = false
@@ -905,7 +905,7 @@ local function readInput()
                                 player.y = ty
                             else
                                 if playerScript then
-                                    (playerScript.bump or playerScript.any)(playerScript, player, event_persist:new(), "bump")
+                                    (playerScript.bump or playerScript.any)(__NIL, player, event_persist:new(), "bump")
                                 end
                             end
                             
@@ -920,14 +920,14 @@ local function readInput()
                             end
                             
                             if _type == TTYPE_SPRITE and config.autoAct then
-                                (_script.interact or _script_any or default_event_interact)(ttile.script, ttile, event_persist:new(), "interact")
+                                (_script.interact or _script_any or default_event_interact)(__NIL, ttile, event_persist:new(), "interact")
                             elseif _type == TTYPE_ITEM then
-                                (_script.collect or _script_any or default_event_collect)(ttile.script, ttile, event_persist:new(), "collect")
+                                (_script.collect or _script_any or default_event_collect)(__NIL, ttile, event_persist:new(), "collect")
                             end
                         end
                     end
                     if playerScript then
-                        (playerScript.update or playerScript.any)(playerScript, player, event_persist:new(), "update")
+                        (playerScript.update or playerScript.any)(__NIL, player, event_persist:new(), "update")
                     end
                 end
             end
@@ -983,7 +983,7 @@ function playdate.update()
             end
         end
         
-        (pulp.gameScript.loop or pulp.gameScript.any)(pulp.gameScript, pulp.game, event_persist:new(), "loop")
+        (pulp.gameScript.loop or pulp.gameScript.any)(__NIL, pulp.game, event_persist:new(), "loop")
     end
         
     playdate.display.setInverted(pulp.invert)
@@ -1121,9 +1121,8 @@ function playdate.update()
     for i=1,#timers_activate do
         local timer = timers_activate[i]
         assert(timer.actor)
-        assert(timer.self)
         assert(timer.actor.script)
-        timer.block(timer.self, timer.actor, timer.event, timer.evname)
+        timer.block(__NIL, timer.actor, timer.event, timer.evname)
     end
     
     -- draw all non-player tiles
@@ -1141,7 +1140,7 @@ function playdate.update()
     local playerScript = pulp:getPlayerScript()
     
     if playerScript then
-        (playerScript.draw or playerScript.any)(playerScript, player, event_persist:new(), "draw")
+        (playerScript.draw or playerScript.any)(__NIL, player, event_persist:new(), "draw")
     end
     
     if not pulp.hideplayer and player.tile then
@@ -1358,13 +1357,14 @@ function pulp:enterRoom(rid)
         -- 'load' and 'start' events every time restart
         local event = event_persist:new()
         for _, script in pairs(pulp.scripts) do
-            ;(script.load or script.any)(script, pulp:getScriptPrototype(script), event, "load")
+            ;(script.load or script.any)(__NIL, pulp:getScriptPrototype(script), event, "load")
         end
         pulp.game_is_loaded = true
     
         -- 'start' event
         pulp.roomStart = false
-        ;(pulp.game.script.start or pulp.game.script.any)(game, nil, event_persist:new(), "start")
+        -- FIXME: instead of 'nil', pass 'game'?
+        ;(pulp.game.script.start or pulp.game.script.any)(__NIL, nil, event_persist:new(), "start")
     end
     
     -- 'enter' event
@@ -1423,7 +1423,7 @@ function pulp:emit(evname, event)
     assert(event ~= pulp.player)
     
     tasks[#tasks+1] = function()
-        ;(pulp.gameScript[evname] or pulp.gameScript.any)(pulp.gameScript, pulp.game, event, evname)
+        ;(pulp.gameScript[evname] or pulp.gameScript.any)(__NIL, pulp.game, event, evname)
     end
     
     local roomScript = pulp:getCurrentRoom().script
@@ -1431,7 +1431,7 @@ function pulp:emit(evname, event)
         assert(roomScript.any);
         tasks[#tasks+1] = function()
             assert(roomScript.any);
-            (roomScript[evname] or roomScript.any)(roomScript, pulp:getCurrentRoom(), event, evname)
+            (roomScript[evname] or roomScript.any)(__NIL, pulp:getCurrentRoom(), event, evname)
         end
     end
     
@@ -1443,7 +1443,7 @@ function pulp:emit(evname, event)
             if script then
                 assert(script.any)
                 tasks[#tasks+1] = function()
-                    ;(script[evname] or script.any)(script, tileInstance, event, evname)
+                    ;(script[evname] or script.any)(__NIL, tileInstance, event, evname)
                 end
             end
         end
@@ -1454,7 +1454,7 @@ function pulp:emit(evname, event)
     local player = pulp.player
     if playerScript then
         tasks[#tasks+1] = function()
-            ;(playerScript[evname] or playerScript.any)(playerScript, player, event, evname)
+            ;(playerScript[evname] or playerScript.any)(__NIL, player, event, evname)
         end
     end
     
@@ -1510,7 +1510,7 @@ function pulp.__fn_once(self, actor, event, evname, block, song)
         pulp:getSongName(song),
         true,
         block and function()
-            block(self, actor, event, evname)
+            block(__NIL, actor, event, evname)
         end
     )
 end
@@ -1821,7 +1821,7 @@ function pulp.__fn_act()
         local itemtile = roomtiles[y][x]
         if itemtile.ttype == TTYPE_ITEM then
             local _script = itemtile.script or {};
-            (_script.collect or _script.any or default_event_collect)(_script, itemtile, event_persist:new(), "collect")
+            (_script.collect or _script.any or default_event_collect)(__NIL, itemtile, event_persist:new(), "collect")
         end
     end
     x += dx
@@ -1830,7 +1830,7 @@ function pulp.__fn_act()
         local itemtile = roomtiles[y][x]
         if itemtile.ttype == TTYPE_SPRITE then
             local _script = itemtile.script or {};
-            (_script.interact or _script.any or default_event_interact)(_script, itemtile, event_persist:new(), "interact")
+            (_script.interact or _script.any or default_event_interact)(__NIL, itemtile, event_persist:new(), "interact")
         end
     end
 end
@@ -1869,7 +1869,7 @@ function pulp.__fn_goto(x, y, room)
         local playerScript = pulp:getPlayerScript()
         stackdepth += 1
         if playerScript and not preventStackOverflow() then
-            (playerScript.update or playerScript.any)(playerScript, player, event_persist:new(), "update")
+            (playerScript.update or playerScript.any)(__NIL, player, event_persist:new(), "update")
         end
         stackdepth -= 1
     end
@@ -1899,12 +1899,12 @@ function pulp.__fn_tell(event, evname, block, actor)
     if type(actor) == "string" or type(actor) == "number" then
         local tile = pulp:getTile(actor)
         if tile then
-            block(tile.script, pulp:getScriptPrototype(tile.script), event, evname)
+            block(__NIL, pulp:getScriptPrototype(tile.script), event, evname)
         else
             print("WARNING: `tell` command on invalid tile '" .. tostring(actor) .. '"')
         end
     elseif type(actor) == "table" then
-        block(actor.script or EMPTY, actor, event, evname)
+        block(__NIL or EMPTY, actor, event, evname)
     else
         assert(false, "invalid tell target: " .. tostring(actor))
     end

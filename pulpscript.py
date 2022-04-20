@@ -280,7 +280,7 @@ def ex_embed(expression, ctx):
     return f"__pulp.__ex_embed({decode_rvalue(expression[1], ctx)})"
 
 def ex_subroutine(expression, ctx):
-    s = "function(__self, __actor, event, evname)\n"
+    s = "function(__self, __actor, event, evname) assert(not __self)\n"
     ctx.indent += 2
     s += transpile_commands(ctx.blocks[expression[1]], ctx, True)
     ctx.indent -= 2
@@ -372,15 +372,15 @@ def op_call(cmd, ctx):
     
     # NOTE: it's important that we use '__self' here, as *mimic* calls do not call back virtually to the original
     # actor's script.
-    ctx.get_funccache().add(f"local __evobj = {ctx.get_evobj()}")
+    # ctx.get_funccache().add(f"local __evobj = {ctx.get_evobj()}")
     
     if istoken(cmd[1]):
         fnstr = f"\"{cmd[1]}\""
-        callfn = f"__evobj.{cmd[1]}"
+        callfn = f"{ctx.get_evobj()}.{cmd[1]}"
     else:
         fnstr = decode_rvalue(cmd[1], ctx)
-        callfn = f"__evobj[{fnstr}]"
-    return f";({callfn} or __evobj.any)(__evobj, __actor, event, {fnstr}) -- call {fnstr}"
+        callfn = f"{ctx.get_evobj()}[{fnstr}]"
+    return f";({callfn} or {ctx.get_evobj()}.any)(__NIL, __actor, event, {fnstr}) -- call {fnstr}"
         
 def op_emit(cmd, ctx):
     return f"__pulp:emit({decode_rvalue(cmd[1], ctx)}, event)"
@@ -390,7 +390,7 @@ def op_mimic(cmd, ctx):
         s = f"do -- (mimic)\n"
         ctx.indent += 1
         s += ctx.gi() + f"local __mimic_target__ = (__pulp.tiles[{decode_rvalue(cmd[1], ctx)}] or __pulp.EMPTY).script;\n"
-        s += ctx.gi() + "(__mimic_target__[__evname] or __mimic_target__.any)(__mimic_target__, __actor, event, __evname)\n"
+        s += ctx.gi() + "(__mimic_target__[__evname] or __mimic_target__.any)(__NIL, __actor, event, __evname)\n"
         ctx.indent -= 1
         s += ctx.gi() + "end"
         return s
@@ -398,7 +398,7 @@ def op_mimic(cmd, ctx):
         s = "do -- (mimic)\n"
         ctx.indent += 1
         s += ctx.gi() + f"local __mimic_target__ = __pulp:getScript({decode_rvalue(cmd[1], ctx)}) or __pulp.EMPTY;\n"
-        s += ctx.gi() + f"(__mimic_target__[__evname] or __mimic_target__.any)(__mimic_target__, __actor, event, __evname)\n"
+        s += ctx.gi() + f"(__mimic_target__[__evname] or __mimic_target__.any)(__NIL, __actor, event, __evname)\n"
         ctx.indent -= 1
         s += ctx.gi() + "end"
         return s
@@ -412,7 +412,7 @@ def op_tell(cmd, ctx):
         s += ctx.gi() + f"local __actor = __roomtiles[{decode_rvalue(cmd[1][2], ctx)}][{decode_rvalue(cmd[1][1], ctx)}]\n"
         s += ctx.gi() + f"if __actor and __actor.tile then\n"
         ctx.indent += 1
-        ctx.push_evobj("__actor.script or __pulp.EMPTY")
+        ctx.push_evobj("__actor.script")
         s += transpile_commands(ctx.blocks[cmd[2][1]], ctx, True)
         ctx.pop_evobj()
         ctx.indent -= 1
@@ -431,7 +431,7 @@ def op_tell(cmd, ctx):
         s += ctx.gi() + f"local __actor = {target}\n"
         s += ctx.gi() + f"if __actor then\n"
         ctx.indent += 1
-        ctx.push_evobj("__actor.script or __pulp.EMPTY")
+        ctx.push_evobj("__actor.script")
         s += transpile_commands(ctx.blocks[cmd[2][1]], ctx, True)
         ctx.pop_evobj()
         ctx.indent -= 1
@@ -446,7 +446,7 @@ def op_tell(cmd, ctx):
 def opex_func(cmd, op, prefix, ctx):
     mainargs = []
     setargs = {
-        "self": "__self",
+        "self": "true",
         "actor": "__actor",
         "event": "event",
         "evname": "__evname",
@@ -558,9 +558,9 @@ def transpile_commands(commands, ctx, has_funccache=False):
 def transpile_event(evobj, evname, ctx, blockidx, evobjname=None):
     _evobj = f"__pulp:getScript(\"{evobj}\")" # evobjname would be faster, but less clear.
     if istoken(evname):
-        s = f"{_evobj}.{evname} = function(__self, __actor, event, __evname)\n"
+        s = f"{_evobj}.{evname} = function(__self, __actor, event, __evname) assert(not __self)\n"
     else:
-        s = f"{_evobj}[\"{evname}\"] = function(__self, __actor, event, __evname)\n"
+        s = f"{_evobj}[\"{evname}\"] = function(__self, __actor, event, __evname) assert(not __self)\n"
     
     block = ctx.blocks[blockidx]
     
