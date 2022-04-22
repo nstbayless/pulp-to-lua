@@ -519,6 +519,14 @@ def opex_func(cmd, op, prefix, ctx):
 def op_inc(cmd, operator, ctx):
     return cmd[1] + operator
     
+def op_random(cmd, ctx):
+    if len(cmd) == 2:
+        return f"__random({decode_rvalue(cmd[1], ctx)})"
+    elif len(cmd) == 3:
+        return f"__random({decode_rvalue(cmd[1], ctx)}, {decode_rvalue(cmd[2], ctx)})"
+    else:
+        assert False, "wrong number of arguments for 'random'"
+    
 def comment(cmd, prevline, ctx):
     s = "--"
     idx = cmd[1]
@@ -560,6 +568,8 @@ def transpile_command(cmd, ctx):
         return ctx.gi() + op_inc(cmd, "+=1", ctx) + "\n"
     elif op == "dec":
         return ctx.gi() + op_inc(cmd, "-=1", ctx) + "\n"
+    elif op == "random":
+        return ctx.gi() + op_random(cmd, ctx) + "\n"
     elif op == "if":
         return ctx.gi() + op_block(cmd, "if", "then", "end", ctx) + "\n"
     elif op == "while":

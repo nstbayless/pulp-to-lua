@@ -46,9 +46,11 @@ ROOMH = 15
 ctx = PulpScriptContext()
 
 def startcode():
-    code = """-- tweak sound engine to sound as it does on firefox.
--- set this to false to make the sound engine sound as it does on pdx export.
-local FIREFOX_SOUND_COMPAT = true
+    code = """-- tweak sound engine to sound as it sounded on firefox prior to 1.10.0.
+-- set this to true to make the sfx sound as it did prior to 1.10.0.
+-- set this to false to make the sfx sound as it does on pdx export.
+-- currently, there is no compatability mode to make the music sound as it did in 1.10.0.
+local FIREFOX_SOUND_COMPAT = false
 
 -- set random seed
 math.randomseed(playdate.getSecondsSinceEpoch())
