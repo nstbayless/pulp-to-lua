@@ -1,6 +1,16 @@
 # Builds and runs all pulp.json files in tests/ folder in order.
 # Feel free to add some tests of your own to that folder.
 
+if [ -z "$PLAYDATE_SDK_PATH" ]; then
+    echo "Error: PLAYDATE_SDK_PATH not set. Exiting."
+    exit 1
+fi
+
+if [ ! -f ./pulplua.py ]; then
+    echo "Error: test.sh must be run in the pulp-to-lua repository directory."
+    exit 1
+fi
+
 PLAYDATE_SDK_PATH="${PLAYDATE_SDK_PATH/\~/$HOME}"
 
 echo "$PLAYDATE_SDK_PATH"

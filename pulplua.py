@@ -5,6 +5,10 @@ import shutil
 from store import LuaOut as LuaOut
 from pulpscript import transpile_event, PulpScriptContext, istoken, tile_ids, escape_string
 
+if not os.path.exists("./pulplua.py"):
+    print("Error: must be run in the pulp-to-lua repository directory.")
+    exit(1)
+
 try:
     from PIL import Image
 except:
