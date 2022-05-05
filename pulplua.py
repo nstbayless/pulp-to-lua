@@ -10,7 +10,7 @@ if not os.path.exists("./pulplua.py"):
     exit(1)
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageDraw
 except:
     print("ERROR. Failed to open module PIL. You may need to install PIL or Pillow.")
     print("PIL is a python image manipulation library. It is required to produce the tile images for pulp.")
@@ -480,7 +480,7 @@ def generate_launcher_card(pulp_json, tilesheet):
     print("Generating launcher card...")
     
     # initialize launcher image
-    launcher_image = Image.new("1", (200, 120)) # create image sized to pulp resolution
+    launcher_image = Image.new("LA", (200, 120)) # create image sized to pulp resolution
     
     # locate launcher card info in pulp json can be found in the n-th element of the "rooms" array, where n is the value specified in the "card" key	 
     print(f"launcher card room name: {pulp_json['rooms'][pulp_json['card']]['name']}")
@@ -508,18 +508,27 @@ def generate_launcher_card(pulp_json, tilesheet):
             
             tile_counter+=1
     
-    
     # NOTE: The card image at this point is 200 X 120 which is Pulp's full-screen resolution
     
     # resize image from Pulp's resolution (200 x 120) to standard Playdate resolution then crop to 350 x 155
     resized_card = launcher_image.resize((400, 240))    
     cropped_card = resized_card.crop((25, 42, 375, 197))
-
+    
+    # draw boarder around cropped card
+    boarder = ImageDraw.Draw(cropped_card)
+    boarder.rounded_rectangle([0, 0, 349, 154], radius=8, fill=None, outline=0, width=2)
+    
+    # create stencil to add alpha to launcher card corners
+    alpha_boarder = Image.new("L", cropped_card.size, 0)
+    cropped_corners = ImageDraw.Draw(alpha_boarder)
+    cropped_corners.rounded_rectangle([0, 0, 349, 154], radius=8, fill=255, outline=0, width=0)
+    cropped_card.putalpha(alpha_boarder)
+    
     # save launcher image to  file
     launcher_card_path = os.path.join(outpath, launcher_path, "card.png")    
     cropped_card.save( launcher_card_path, "PNG" )
     print(f"launcher card saved to {launcher_card_path}")
-    
+
 
 # generate launcher card
 generate_launcher_card(pulp, frame_img)
