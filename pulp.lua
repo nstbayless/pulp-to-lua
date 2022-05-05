@@ -183,12 +183,12 @@ local function copytable(t)
     return t2
 end
 
--- input: a string, height and width
--- output: a list of strings, one for each 'page', each of which will fit in  w-by-h rectangle (as rendered with pulp.__fn_label)
-
 local function trimLineEnd(s)
     return string.gsub(s, "%s*$", "")
 end
+
+-- input: a string, height and width
+-- output: a list of strings, one for each 'page', each of which is word-wrapped to fit in  w-by-h rectangle (as rendered with pulp.__fn_label)
 
 local function paginate(text, w, h)
     -- virtal cursor position
