@@ -4,6 +4,8 @@
 
 This transpiler is primarily intended to improve performance of Pulp projects, but you can also use it to extend the project with Lua API functionality not available in Pulp.
 
+[![Buy a coffee](https://www.buymeacoffee.com/assets/img/custom_images/yellow_img.png)](https://www.buymeacoffee.com/NaOH)
+
 ## Requirements
 
 You must have [python 3](https://www.python.org/) installed, and the `PIL` or `Pillow` module as well. `python3 -m pip install Pillow` on the command line ought to suffice.
