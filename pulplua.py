@@ -470,7 +470,6 @@ with open(os.path.join(outpath, "pdxinfo"), "w") as f:
         pulp["name"].replace(" ","").replace(".", "") + \
         str('\n'))
     f.write("version=" + str(pulp["version"]) + str('\n'))
-    f.write("buildNumber=123\n")
     f.write("imagePath=" + launcher_path + "\n")
     f.write("launchSoundPath=" + launcher_path + "\n")
 print(f"pdxinfo saved to {outpath}")
