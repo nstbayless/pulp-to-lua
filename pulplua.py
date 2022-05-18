@@ -66,7 +66,10 @@ math.randomseed(playdate.getSecondsSinceEpoch())
         + f"  halfwidth = {str(halfwidth).lower()},\n" \
         + f"  pipe_img = playdate.graphics.imagetable.new(\"pipe\"),\n" \
         + f"  font_img = playdate.graphics.imagetable.new(\"font\"),\n" \
-        + f"  tile_img = playdate.graphics.imagetable.new(\"tiles\")\n" \
+        + f"  tile_img = playdate.graphics.imagetable.new(\"tiles\"),\n" \
+        + f"  PTLE_SMOOTH_MOVEMENT_SPEED = 0,\n" \
+        + f"  PTLE_SMOOTH_OFFSET_X = 0,\n" \
+        + f"  PTLE_SMOOTH_OFFSET_Y = 0\n" \
     + "}\n"
     code += "local __pulp <const> = ___pulp\n"
     code += "import \"pulp\"\n"

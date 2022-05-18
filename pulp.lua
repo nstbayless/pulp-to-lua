@@ -22,6 +22,7 @@ local substr <const> = string.sub
 local random <const> = math.random
 local string_char <const> = string.char
 local string_byte <const> = string.byte
+local abs <const> = math.abs
 
 local TTYPE_WORLD <const> = 0
 local TTYPE_PLAYER <const> = 1
@@ -56,7 +57,11 @@ pulp.player = {
     is_player = true,
     frame = 0,
     x = 0,
-    y = 0
+    y = 0,
+    
+    -- used if PTLE_SMOOTH_MOVEMENT_SPEED > 0
+    smooth_x = 0,
+    smooth_y = 0
 }
 pulp.invert = false
 pulp.listen = true
@@ -172,6 +177,17 @@ local wavetypes <const> = {
     [3] = playdate.sound.kWaveTriangle,
     [4] = playdate.sound.kWaveNoise,
 }
+
+-- tweens x toward y by adding/subtracting at most c
+local function tween(x, y, c)
+    if abs(x - y) <= c then
+        return y
+    elseif x < y then
+        return x + c
+    else
+        return x - c
+    end
+end
 
 ------------------------------------------------ API ---------------------------------------------------------
 
@@ -847,7 +863,7 @@ local function readInput()
         event_persist.ty = ty
     
         local playerScript = pulp:getPlayerScript()
-        if pulp.listen then
+        if pulp.listen and (pulp.PTLE_SMOOTH_MOVEMENT_SPEED <= 0 or (pulp.player.smooth_x == pulp.player.x and pulp.player.smooth_y == pulp.player.y)) then
             if a_pressed and playerScript then
                 (playerScript.confirm or playerScript.any)(pulp.player, event_persist:new(), "confirm")
             end
@@ -903,6 +919,10 @@ local function readInput()
                             if not ttile.solid then
                                 player.x = tx
                                 player.y = ty
+                                if pulp.PTLE_SMOOTH_MOVEMENT_SPEED <= 0 then
+                                    player.smooth_x = player.x
+                                    player.smooth_y = player.y
+                                end
                             else
                                 if playerScript then
                                     (playerScript.bump or playerScript.any)(player, event_persist:new(), "bump")
@@ -942,6 +962,32 @@ local function readInput()
     prev_right = right
 end
 
+
+local function smoothMovementBegin()
+    local player = pulp.player
+    pulp.smooth_true_x = player.x
+    pulp.smooth_true_y = player.y
+    if pulp.PTLE_SMOOTH_MOVEMENT_SPEED > 0 then
+        player.smooth_x = tween(player.smooth_x, player.x, pulp.PTLE_SMOOTH_MOVEMENT_SPEED)
+        player.smooth_y = tween(player.smooth_y, player.y, pulp.PTLE_SMOOTH_MOVEMENT_SPEED)
+        pulp.PTLE_SMOOTH_OFFSET_X = player.smooth_x - player.x
+        pulp.PTLE_SMOOTH_OFFSET_Y = player.smooth_y - player.y
+    else
+        player.smooth_x = player.x
+        player.smooth_y = player.y
+        pulp.PTLE_SMOOTH_OFFSET_X = 0
+        pulp.PTLE_SMOOTH_OFFSET_Y = 0
+    end
+end
+
+local function smoothMovementEnd()
+    local player = pulp.player
+    player.x = pulp.smooth_true_x
+    player.y = pulp.smooth_true_y
+    pulp.PTLE_SMOOTH_OFFSET_X = 0
+    pulp.PTLE_SMOOTH_OFFSET_Y = 0
+end
+
 function playdate.update()
     if not pulp.game_is_loaded then
         return
@@ -965,6 +1011,8 @@ function playdate.update()
         if pulp.roomQueuedX and pulp.roomQueuedY then
             pulp.player.x = pulp.roomQueuedX
             pulp.player.y = pulp.roomQueuedY
+            pulp.player.smooth_x = pulp.player.x
+            pulp.player.smooth_y = pulp.player.y
         end
         
         pulp:enterRoom(pulp.roomQueued)
@@ -1000,13 +1048,22 @@ function playdate.update()
         end
     end
     
+    smoothMovementBegin()
+    
     local scrolly = 0
     local scrollx = 0
+    -- smooth_scroll* and scroll* differ only when smooth movement is enabled
+    local smooth_scrollx = 0
+    local smooth_scrolly = 0
     local scroll = false
     
     if config.follow ~= 0 then
-        scrollx = config.followCenterX - pulp.player.x
-        scrolly = config.followCenterY - pulp.player.y
+        scrollx = config.followCenterX - pulp.player.x - math.floor(pulp.PTLE_SMOOTH_OFFSET_X)
+        scrolly = config.followCenterY - pulp.player.y - math.floor(pulp.PTLE_SMOOTH_OFFSET_Y)
+        smooth_scrollx = config.followCenterX - pulp.player.x - pulp.PTLE_SMOOTH_OFFSET_X
+        smooth_scrolly = config.followCenterY - pulp.player.y - pulp.PTLE_SMOOTH_OFFSET_Y
+        pulp.PTLE_SMOOTH_OFFSET_FRACX = pulp.PTLE_SMOOTH_OFFSET_X - math.floor(pulp.PTLE_SMOOTH_OFFSET_X)
+        pulp.PTLE_SMOOTH_OFFSET_FRACY = pulp.PTLE_SMOOTH_OFFSET_Y - math.floor(pulp.PTLE_SMOOTH_OFFSET_Y)
         if scrolly == 0 and scrollx == 0 then
             scroll = false
         else
@@ -1126,7 +1183,7 @@ function playdate.update()
     end
     
     -- draw all non-player tiles
-    tilemap:draw(0, 0)
+    tilemap:draw(-pulp.PTLE_SMOOTH_OFFSET_FRACX * GRIDX, -pulp.PTLE_SMOOTH_OFFSET_FRACY * GRIDY)
     
     -- update player frame
     local player = pulp.player
@@ -1138,16 +1195,17 @@ function playdate.update()
     end
     
     local playerScript = pulp:getPlayerScript()
-    
     if playerScript then
         (playerScript.draw or playerScript.any)(player, event_persist:new(), "draw")
     end
     
     if not pulp.hideplayer and player.tile then
         local frame = player.tile.frames[1 + (floor(player.frame) % max(1, #player.tile.frames))]
-        tile_img[frame]:draw(GRIDX * (player.x + scrollx), GRIDY * (player.y + scrolly))
+        tile_img[frame]:draw(GRIDX * (player.x + smooth_scrollx + pulp.PTLE_SMOOTH_OFFSET_X), GRIDY * (player.y + smooth_scrolly + pulp.PTLE_SMOOTH_OFFSET_Y))
     end
     pulp.hideplayer = false
+    
+    smoothMovementEnd()
     
     drawMessage(pulp.message)
     
@@ -1385,6 +1443,8 @@ function pulp:start()
     -- FIXME: just call pulp.__fn_swap() instead.
     pulp.player.x = pulp.startx
     pulp.player.y = pulp.starty
+    pulp.player.smooth_x = pulp.startx
+    pulp.player.smooth_y = pulp.starty
     pulp.player.tile = pulp.tiles[pulp.playerid]
     pulp.player.id = pulp.playerid
     pulp.player.frames = pulp.player.tile.frames
@@ -1859,6 +1919,10 @@ function pulp.__fn_goto(x, y, room)
         event_persist.dy = (y or player.y) - player.y
         player.x = x or player.x
         player.y = y or player.y
+        if pulp.PTLE_SMOOTH_MOVEMENT_SPEED <= 0 then
+            player.smooth_x = player.x
+            player.smooth_y = player.y
+        end
         
         -- oddly, the reference implementation seems to do this:
         local playerScript = pulp:getPlayerScript()

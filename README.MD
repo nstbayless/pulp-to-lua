@@ -39,6 +39,19 @@ While `pulp-to-lua` should already significantly improve performance by an order
 - To improve performance, up to around ~150 variables will be declared as `local` by the transpiler, and it will select the variables that appear most frequently in the code. This is not necessarily the variables which are most frequently used at runtime! Do with this information what you will -- you may wish to reuse variable names where possible.
 - `mimic` events can be heavily optimized by the transpiler for events that contain only one line and that line is `mimic` with a static name or id literal.
 
+## Extensions
+
+You may add custom lua after transpiling, but in addition, the following capabilities have been added:
+
+### Smooth Movement
+
+Enable this **within pulpscript** by setting `__PTLE_SMOOTH_MOVEMENT_SPEED = 0.25` (or to any value between 0 and 1). This causes the player's position to smoothly
+interpolate while moving. You can set it back to 0 at any point in order to restore normal movement, even temporarily. While the player is in motion, it will be as though `config.listen` is false, so no additional inputs can be had until the player reaches the destination.
+
+When drawing, you can add the values `__PTLE_SMOOTH_OFFSET_X` and `__PTLE_SMOOTH_OFFSET_Y` to a coordinate to make it appear at the player's location.
+
+Of course, when using regular (non-milled) pulp, these values will all default to 0, so no unexpected behaviour will occur by adding `__PTLE_SMOOTH_OFFSET_X` or `__PTLE_SMOOTH_OFFSET_Y`. Therefore, there is no need to check for the occurrence of transpilation from within the code.
+
 ## Contributions
 
 Contributions are welcome! Ask the author (NaOH#1432 on [discord](https://discord.gg/VNVQHSS49U)) for advice.

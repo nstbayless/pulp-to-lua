@@ -39,6 +39,10 @@ class PulpScriptContext:
         if "." in varname:
             # ignore these.
             return varname
+            
+        if varname.startswith("__PTLE_"):
+            #ignore pulp-to-lua extension variables
+            return varname
         
         self.vars.add(varname)
         self.var_usage[varname] = self.var_usage.get(varname, 0) + 1
@@ -254,7 +258,12 @@ def remap_special_varname(varname, ctx):
         return "--[[(AMPM)]] (__getTime().hour < 12 and \"AM\" or \"PM\")  --[[(PTL-only?)]]"
     elif varname == "datetime.timestamp":
         return "__getSecondsSinceEpoch()"
-        
+    elif varname == "__PTLE_SMOOTH_MOVEMENT_SPEED":
+        return "__pulp.PTLE_SMOOTH_MOVEMENT_SPEED"
+    elif varname == "__PTLE_SMOOTH_OFFSET_X":
+        return "__pulp.PTLE_SMOOTH_OFFSET_X"
+    elif varname == "__PTLE_SMOOTH_OFFSET_Y":
+        return "__pulp.PTLE_SMOOTH_OFFSET_Y"
         
     return varname
 
