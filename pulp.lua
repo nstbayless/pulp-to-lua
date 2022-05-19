@@ -1069,6 +1069,9 @@ function playdate.update()
         else
             scroll = true
         end
+    else
+        pulp.PTLE_SMOOTH_OFFSET_FRACX = 0
+        pulp.PTLE_SMOOTH_OFFSET_FRACY = 0
     end
     
     local framei = nil
