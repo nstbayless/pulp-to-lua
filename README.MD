@@ -43,6 +43,16 @@ While `pulp-to-lua` should already significantly improve performance by an order
 
 You may add custom lua after transpiling, but in addition, the following capabilities have been added:
 
+### Inline Lua
+
+Any comments starting with `// [LUA]` will have this prefix stripped, allowing you to write raw Lua code. For example, to ensure that the data store saves when the game is closed (instead of saving only when rooms exit):
+
+```pulpscript
+on loop do
+    // [LUA] if playdate.gameWillTerminate() pulp:savestore() end
+end
+```
+
 ### Smooth Movement
 
 Enable this **within pulpscript** by setting `__PTLE_SMOOTH_MOVEMENT_SPEED = 0.25` (or to any value between 0 and 1). This causes the player's position to smoothly

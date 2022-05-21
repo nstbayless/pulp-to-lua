@@ -545,9 +545,13 @@ def comment(cmd, prevline, ctx):
     if "\n" in comment:
         s += "[["
     
+    # PTL extension: raw LUA code.
+    if comment.strip().startswith("[LUA]"):
+        return comment.strip()[len("[LUA]"):].strip();
+    
     if prevline:
         s += "^"
-        
+    
     s += comment
         
     if "\n" in comment:
