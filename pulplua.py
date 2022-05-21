@@ -513,7 +513,7 @@ def generate_launcher_card(pulp_json, tilesheet):
     # NOTE: The card image at this point is 200 X 120 which is Pulp's full-screen resolution
     
     # resize image from Pulp's resolution (200 x 120) to standard Playdate resolution then crop to 350 x 155
-    resized_card = launcher_image.resize((400, 240))    
+    resized_card = launcher_image.resize((400, 240), resample = Image.Resampling.NEAREST)
     cropped_card = resized_card.crop((25, 42, 375, 197))
     
     # draw boarder around cropped card
