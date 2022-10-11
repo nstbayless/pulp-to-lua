@@ -17,6 +17,10 @@ class PulpScriptContext:
         
         self.evobjs = []
         
+        # for [PDXINFO] and [PTL] extension
+        self.ext_pdxinfo = dict()
+        self.ext_ptl = dict()
+        
     def push_funccache(self):
         self.funccache.append(set())
     
@@ -56,6 +60,15 @@ class PulpScriptContext:
     # get-indent.
     def gi(self):
         return "  "*self.indent
+        
+    def commentconfigure(self, mode, conf):
+        key, value = conf.split("=")
+        key = key.strip()
+        value = value.strip()
+        if mode == "PTL":
+            self.ext_ptl[key] = value
+        if mode == "PDXINFO":
+            self.ext_pdxinfo[key] = value
         
 compdict = {
     "lt": "<",
@@ -546,8 +559,17 @@ def comment(cmd, prevline, ctx):
         s += "[["
     
     # PTL extension: raw LUA code.
-    if comment.strip().startswith("[LUA]"):
+    stripcomment = comment.strip()
+    if stripcomment.startswith("[LUA]"):
         return comment.strip()[len("[LUA]"):].strip();
+        
+    # PTL extension: PDXINFO
+    
+    if stripcomment.startswith("[PDXINFO]"):
+        ctx.commentconfigure("PDXINFO", stripcomment[len("[PDXINFO]"):].strip())
+        
+    if stripcomment.startswith("[PTL]"):
+        ctx.commentconfigure("PTL", stripcomment[len("[PTL]"):].strip())
     
     if prevline:
         s += "^"

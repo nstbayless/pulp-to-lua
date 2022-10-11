@@ -41,7 +41,7 @@ While `pulp-to-lua` should already significantly improve performance by an order
 
 ## Extensions
 
-You may add custom lua after transpiling, but in addition, the following capabilities have been added:
+The following capabilities are introduced by pulp-to-lua which are not in pulp originally:
 
 ### Inline Lua
 
@@ -53,6 +53,12 @@ on loop do
 end
 ```
 
+### PDXINFO
+
+Any comment of the form `// [PDXINFO] key=value` will replace the associated line in the `pdxinfo` file. For example:
+
+`// [PDXINFO] version=1.5.3`
+
 ### Smooth Movement
 
 Enable this **within pulpscript** by setting `__PTLE_SMOOTH_MOVEMENT_SPEED = 0.25` (or to any value between 0 and 1). This causes the player's position to smoothly
@@ -61,6 +67,18 @@ interpolate while moving. You can set it back to 0 at any point in order to rest
 When drawing, you can add the values `__PTLE_SMOOTH_OFFSET_X` and `__PTLE_SMOOTH_OFFSET_Y` to a coordinate to make it appear at the player's location.
 
 Of course, when using regular (non-milled) pulp, these values will all default to 0, so no unexpected behaviour will occur by adding `__PTLE_SMOOTH_OFFSET_X` or `__PTLE_SMOOTH_OFFSET_Y`. Therefore, there is no need to check for the occurrence of transpilation from within the code.
+
+### Legacy Sound
+
+To use the sound engine for sfx from before the 1.10.0 update, place the following comment in any pulp code block. (Note that this does not affect music.)
+
+`// [PTL] legacySound=True`
+
+### Debug FPS
+
+To display the frame rate during runtime, place the following comment in any pulp code block:
+
+`// [PTL] showFPS=True`
 
 ## Contributions
 

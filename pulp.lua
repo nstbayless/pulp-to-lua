@@ -1227,7 +1227,9 @@ function playdate.update()
         playdate.graphics.clear( playdate.graphics.kColorBlack )
     end
     
-    -- playdate.drawFPS()
+    if pulp.PTLE_SHOW_FPS then
+        playdate.drawFPS()
+    end
     
     pulp.frame += 1
 end

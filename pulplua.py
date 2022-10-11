@@ -46,13 +46,26 @@ def main(args):
     ROOMH = 15
 
     ctx = PulpScriptContext()
+    
+    ctx.ext_pdxinfo["name"] = pulp["name"]
+    ctx.ext_pdxinfo["author"] = pulp["author"]
+    ctx.ext_pdxinfo["description"] = pulp["intro"]
+    ctx.ext_pdxinfo["bundleID"] = "game.pulp." + \
+            pulp["author"].replace(" ","").replace(".", "") + "." + \
+            pulp["name"].replace(" ","").replace(".", "")
+    ctx.ext_pdxinfo["version"] = str(pulp["version"])
+    ctx.ext_pdxinfo["imagePath"] = "launcher/"
+    ctx.ext_pdxinfo["launchSoundPath"] = "launcher_path/"
+    
+    ctx.ext_ptl["legacySound"] = False
+    ctx.ext_ptl["showFPS"] = False
 
     def startcode():
-        code = """-- tweak sound engine to sound as it sounded on firefox prior to 1.10.0.
+        code = f"""-- tweak sound engine to sound as it sounded on firefox prior to 1.10.0.
     -- set this to true to make the sfx sound as it did prior to 1.10.0.
     -- set this to false to make the sfx sound as it does on pdx export.
     -- currently, there is no compatability mode to make the music sound as it did in 1.10.0.
-    local FIREFOX_SOUND_COMPAT = false
+    local FIREFOX_SOUND_COMPAT = {ctx.ext_ptl["legacySound"]}
 
     -- set random seed
     math.randomseed(playdate.getSecondsSinceEpoch())
@@ -72,6 +85,7 @@ def main(args):
             + f"  PTLE_SMOOTH_MOVEMENT_SPEED = 0,\n" \
             + f"  PTLE_SMOOTH_OFFSET_X = 0,\n" \
             + f"  PTLE_SMOOTH_OFFSET_Y = 0\n" \
+            + f"  PTLE_SHOW_FPS = {ctx.ext_ptl['showFPS']}\n" \
         + "}\n"
         code += "local __pulp <const> = ___pulp\n"
         code += "import \"pulp\"\n"
@@ -464,16 +478,14 @@ def main(args):
 
     # create pdxinfo file
     with open(os.path.join(outpath, "pdxinfo"), "w") as f:
-        f.write("name=" + pulp["name"] + str('\n'))
-        f.write("author=" + pulp["author"] + str('\n'))
-        f.write("description=" + pulp["intro"] + str('\n'))
-        f.write("bundleID=" + "game.pulp." + \
-            pulp["author"].replace(" ","").replace(".", "") + "." + \
-            pulp["name"].replace(" ","").replace(".", "") + \
+        f.write("name=" + ctx.ext_pdxinfo["name"] + str('\n'))
+        f.write("author=" + ctx.ext_pdxinfo["author"] + str('\n'))
+        f.write("description=" + ctx.ext_pdxinfo["description"] + str('\n'))
+        f.write("bundleID=" + ctx.ext_pdxinfo["bundleID"] + \
             str('\n'))
-        f.write("version=" + str(pulp["version"]) + str('\n'))
-        f.write("imagePath=" + launcher_path + "\n")
-        f.write("launchSoundPath=" + launcher_path + "\n")
+        f.write("version=" + ctx.ext_pdxinfo["version"] + str('\n'))
+        f.write("imagePath=" + ctx.ext_pdxinfo["imagePath"] + "\n")
+        f.write("launchSoundPath=" + ctx.ext_pdxinfo["launchSoundPath"] + "\n")
     print(f"pdxinfo saved to {outpath}")
 
     # generates launcher card from Pulpscript JSON and tilesheet
