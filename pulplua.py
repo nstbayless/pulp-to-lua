@@ -62,15 +62,15 @@ def main(args):
 
     def startcode():
         code = f"""-- tweak sound engine to sound as it sounded on firefox prior to 1.10.0.
-    -- set this to true to make the sfx sound as it did prior to 1.10.0.
-    -- set this to false to make the sfx sound as it does on pdx export.
-    -- currently, there is no compatability mode to make the music sound as it did in 1.10.0.
-    local FIREFOX_SOUND_COMPAT = {ctx.ext_ptl["legacySound"]}
+-- set this to true to make the sfx sound as it did prior to 1.10.0.
+-- set this to false to make the sfx sound as it does on pdx export.
+-- currently, there is no compatability mode to make the music sound as it did in 1.10.0.
+__FIREFOX_SOUND_COMPAT = false
 
-    -- set random seed
-    math.randomseed(playdate.getSecondsSinceEpoch())
+-- set random seed
+math.randomseed(playdate.getSecondsSinceEpoch())
 
-    -- pulp options (must be set before `import "pulp"`)
+-- pulp options (must be set before `import "pulp"`)
     """
         code += "___pulp = {\n" \
             + f"  playerid = {playerid},\n" \
@@ -84,8 +84,8 @@ def main(args):
             + f"  tile_img = playdate.graphics.imagetable.new(\"tiles\"),\n" \
             + f"  PTLE_SMOOTH_MOVEMENT_SPEED = 0,\n" \
             + f"  PTLE_SMOOTH_OFFSET_X = 0,\n" \
-            + f"  PTLE_SMOOTH_OFFSET_Y = 0\n" \
-            + f"  PTLE_SHOW_FPS = {ctx.ext_ptl['showFPS']}\n" \
+            + f"  PTLE_SMOOTH_OFFSET_Y = 0,\n" \
+            + f"  PTLE_SHOW_FPS = false\n" \
         + "}\n"
         code += "local __pulp <const> = ___pulp\n"
         code += "import \"pulp\"\n"
@@ -94,7 +94,7 @@ def main(args):
         code += "local __tan <const> = math.tan\n"
         code += "local __floor <const> = math.floor\n"
         code += "local __ceil <const> = math.ceil\n"
-        code += "local __round <const> = function(x) return math.ceil(x + 0.5) end\n"
+        code += "local __round <const> = function(x) return __floor(x + 0.5) end\n"
         code += "local __random <const> = math.random\n"
         code += "local __tau <const> = math.pi * 2\n"
         code += "local __tostring <const> = tostring\n"
@@ -114,7 +114,12 @@ def main(args):
         return code
         
     def endcode():
-        code = "\n__pulp:load()\n"
+        code = ""
+        if ctx.ext_ptl["showFPS"]:
+            code += "\n__pulp.PTLE_SHOW_FPS = true"
+        if ctx.ext_ptl["legacySound"]:
+            code += "\n__FIREFOX_SOUND_COMPAT = true"
+        code += "\n__pulp:load()\n"
         code += "__pulp:start()\n"
         return code
         
@@ -453,6 +458,11 @@ def main(args):
     for var in vars:
         code += f"  {var} = 0\n"
     code += "end\n"
+    
+    # script tags
+    for tagname in ctx.script_tags:
+        tag = ctx.script_tags[tagname]
+        code += f"{tagname} = __pulp:getScript(\"{tag['scriptsrc']}\")[\"{tag['name']}\"]\n"
 
     code += endcode()
 
@@ -483,7 +493,7 @@ def main(args):
         f.write("description=" + ctx.ext_pdxinfo["description"] + str('\n'))
         f.write("bundleID=" + ctx.ext_pdxinfo["bundleID"] + \
             str('\n'))
-        f.write("version=" + ctx.ext_pdxinfo["version"] + str('\n'))
+        f.write("version=" + str(ctx.ext_pdxinfo["version"]) + str('\n'))
         f.write("imagePath=" + ctx.ext_pdxinfo["imagePath"] + "\n")
         f.write("launchSoundPath=" + ctx.ext_pdxinfo["launchSoundPath"] + "\n")
     print(f"pdxinfo saved to {outpath}")

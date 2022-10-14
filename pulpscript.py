@@ -21,8 +21,22 @@ class PulpScriptContext:
         self.ext_pdxinfo = dict()
         self.ext_ptl = dict()
         
+        # manual script target optimization
+        self.script_tags = dict()
+        
     def push_funccache(self):
         self.funccache.append(set())
+        
+    def add_script_tag(self, scriptsrc, name):
+        san_name = "__OPTTAG__" + (scriptsrc + "_" + name).replace("-", "_").replace(" ", "_")
+        if san_name in self.script_tags:
+            return san_name
+        
+        self.script_tags[san_name] = {
+            "scriptsrc": scriptsrc,
+            "name": name
+        }
+        return san_name
     
     def pop_funccache(self):
         self.funccache = self.funccache[:-1]
@@ -389,7 +403,7 @@ def op_block(cmd, statement, follow, end, ctx):
         s += ctx.gi() + end
     return s
 
-def op_call(cmd, ctx):
+def op_call(cmd, ctx, tags):
     global EVNAMECOUNTER
     
     # NOTE: it's important that we use '__self' here, as *mimic* calls do not call back virtually to the original
@@ -405,7 +419,13 @@ def op_call(cmd, ctx):
         
     fnbase = f";({callfn} or {ctx.get_evobj()}.any)"
     
-    comment = f"--[call \"{fnstr}\"]"
+    comment = f"--[call \"{fnstr[1:-1]}\"]"
+    
+    if "[DIRECT]" in tags:
+    
+        fnbase = callfn
+        comment += " [DIRECT]"
+            
     
     if ctx.get_evobj() == "__self":
         ctx.get_funccache().add(f"local __self = {ctx.root_evobj} --[this script]")
@@ -418,6 +438,12 @@ def op_call(cmd, ctx):
             else:
                 fnbase = "__self.any"
                 comment += " [doesn't exist, so any]"
+                
+    for tag in tags:
+        if tag.startswith("[SCRIPT:"):
+            scriptsrc = tag[len("[SCRIPT:"):-1]
+            fnbase = ctx.add_script_tag(scriptsrc, fnstr[1:-1])
+            comment += " " + tag
     
     return f"{fnbase}(__actor, event, {fnstr}) {comment}"
         
@@ -563,7 +589,7 @@ def comment(cmd, prevline, ctx):
     if stripcomment.startswith("[LUA]"):
         return comment.strip()[len("[LUA]"):].strip();
         
-    # PTL extension: PDXINFO
+    # PTL extension: PDXINFO/PTL
     
     if stripcomment.startswith("[PDXINFO]"):
         ctx.commentconfigure("PDXINFO", stripcomment[len("[PDXINFO]"):].strip())
@@ -581,9 +607,24 @@ def comment(cmd, prevline, ctx):
         
     return s
         
+def get_next_cmds_tags(ctx, cmds):
+    tags = []
+    for cmd in cmds:
+        if type(cmd) == list:
+            if cmd[0] in ["#", "#$"]:
+                idx = cmd[1]
+                if idx < len(ctx.comments_block):
+                    comment = ctx.comments_block[idx].strip()
+                    if comment.startswith("["):
+                        tags.append(comment)
+        else:
+            break
+    return tags
 
-def transpile_command(cmd, ctx):
+def transpile_command(cmd, ctx, next_cmds):
     op = cmd[0]
+    
+    tags = get_next_cmds_tags(ctx, next_cmds)
     
     if op == "_":
         return "" # ctx.gi() + "\n"
@@ -610,7 +651,7 @@ def transpile_command(cmd, ctx):
     elif op == "while":
         return ctx.gi() + op_block(cmd, "while", "do", "end", ctx) + "\n"
     elif op == "call":
-        return ctx.gi() + op_call(cmd, ctx) + "\n"
+        return ctx.gi() + op_call(cmd, ctx, tags) + "\n"
     elif op == "emit":
         return ctx.gi() + op_emit(cmd, ctx) + "\n"
     elif op == "mimic":
@@ -629,9 +670,10 @@ def transpile_commands(commands, ctx, has_funccache=False):
     if has_funccache:
         ctx.push_funccache()
     s = ""
-    for command in commands:
+    for i in range(len(commands)):
+        command = commands[i]
         if type(command) == list:
-            s += transpile_command(command, ctx)
+            s += transpile_command(command, ctx, commands[i+1:])
     if has_funccache:
         for cached in sorted(list(ctx.get_funccache())):
             s = ctx.gi() + cached + "\n" + s

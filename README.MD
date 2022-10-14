@@ -26,7 +26,7 @@ You can then compile using `pdc` as normal:
 ## Inconsistencies
 
 - The transpilation is likely not perfect. Some behaviour may differ. You are responsible for ensuring that your game performs as intended -- please test it after converting it to Lua! You can help improve pulp-to-lua by reporting behaviourial differences.
-- Audio in particular may sound warped. There are a number of reasons for this. In general, you can avoid must or all of the warping by ensuring that notes are held longer than the sum of their instrument's *attack* and *delay* fields. If that's not feasible, you can try changing `FIREFOX_SOUND_COMPAT` to false in `main.lua` after exporting, or modifying the `SOUNDSCALE` table in `pulp.lua`. This is an ongoing field of research, and you're welcome to contribute!
+- Audio in particular may sound warped. There are a number of reasons for this. In general, you can avoid must or all of the warping by ensuring that notes are held longer than the sum of their instrument's *attack* and *delay* fields. If that's not feasible, you can try changing `__FIREFOX_SOUND_COMPAT` to false in `main.lua` after exporting, or modifying the `SOUNDSCALE` table in `pulp.lua`. This is an ongoing field of research, and you're welcome to contribute!
 - Some Pulp files, especially ones which have been worked on extensively, contain seemingly-broken entries in their JSON, like booleans in place of an object. These may cause errors, and can probably be resolved by inserting a dummy object in its place, e.g. by copying the previous entry. If you can identify the cause of this problem, please report!
 - The wrapping of words in dialogue windows is likely to be subtly different. You are invited to implement a better `paginate()` function (see [pulp.lua](./pulp.lua#paginate))
 
@@ -58,6 +58,8 @@ end
 Any comment of the form `// [PDXINFO] key=value` will replace the associated line in the `pdxinfo` file. For example:
 
 `// [PDXINFO] version=1.5.3`
+
+**Warning**: some bundle IDs can cause `pdc` to crash. It is advised not to customize pdxinfo until you have already fully built the game at least once.
 
 ### Smooth Movement
 

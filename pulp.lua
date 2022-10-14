@@ -648,8 +648,8 @@ local function updateMessage(up, down, left, right, confirm, cancel)
             end
         elseif cancel then
             if pulp.message.previous or config.allowDismissRootMenu ~= 0 then
-                pulp.message = pulp.message.previous;
-                (pulp.gameScript.select or pulp.gameScript.any)(pulp.game, event_persist:new(), "dismiss")
+                pulp.message = pulp.message.previous
+                ;(pulp.gameScript.select or pulp.gameScript.any)(pulp.game, event_persist:new(), "dismiss")
             else
                 (pulp.gameScript.select or pulp.gameScript.any)(pulp.game, event_persist:new(), "invalid")
             end
@@ -1042,7 +1042,7 @@ function playdate.update()
         for i, framec in pairs(framecs) do
             framecs[i] = framec + fps * SPF
             if framecs[i] >= i then
-                framecs[i] -= i
+                framecs[i] = framecs[i] - i
             end
             pulp_tile_fps_lookup_floor[pulp_tile_fps_lookup_floor_lookup[fps][i]] = floor(framecs[i])
         end
@@ -1255,14 +1255,14 @@ function pulp:loadSounds()
             local sequence = playdate.sound.sequence.new() 
             
             local steps_per_second = 4 * sound.bpm / 60
-            local final = FIREFOX_SOUND_COMPAT and (1 + ceil((sound.attack + sound.decay) * steps_per_second)) or 1 
+            local final = __FIREFOX_SOUND_COMPAT and (1 + ceil((sound.attack + sound.decay) * steps_per_second)) or 1 
             local max_polyphony = 3
             for j=1,final do 
                 local any_notes = false
                 local track = playdate.sound.track.new()
                 
                 local scale_factor = 1
-                if FIREFOX_SOUND_COMPAT and j < final then
+                if __FIREFOX_SOUND_COMPAT and j < final then
                     local max_time = j / steps_per_second
                     local destime = (sound.attack + sound.decay)
                     scale_factor = min(max_time/destime, 1)
@@ -2011,7 +2011,7 @@ function pulp.__ex_embed(tid)
     local frame_bh = frame
     local bytes = { 0x80 }
     while frame_bh > 0 do
-        bytes[1] += 1
+        bytes[1] = bytes[1] + 1
         bytes[#bytes+1] = 0x80 + (frame_bh % 128)
         frame_bh = floor(frame_bh / 128)
     end
