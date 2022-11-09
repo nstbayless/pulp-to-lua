@@ -80,6 +80,8 @@ class PulpScriptContext:
         key = key.strip()
         value = value.strip()
         if mode == "PTL":
+            if value == "0" or value == "False" or value == "false":
+                value = False
             self.ext_ptl[key] = value
         if mode == "PDXINFO":
             self.ext_pdxinfo[key] = value
@@ -587,7 +589,10 @@ def comment(cmd, prevline, ctx):
     # PTL extension: raw LUA code.
     stripcomment = comment.strip()
     if stripcomment.startswith("[LUA]"):
-        return comment.strip()[len("[LUA]"):].strip();
+        s = comment.strip()[len("[LUA]"):];
+        if s.startswith(" "):
+          s = s[1:]
+        return s
         
     # PTL extension: PDXINFO/PTL
     
