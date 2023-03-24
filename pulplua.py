@@ -56,6 +56,8 @@ def main(args):
     ctx.ext_pdxinfo["version"] = str(pulp["version"])
     ctx.ext_pdxinfo["imagePath"] = "launcher/"
     ctx.ext_pdxinfo["launchSoundPath"] = "launcher_path/"
+    ctx.ext_pdxinfo["contentWarning"] = ""
+    ctx.ext_pdxinfo["contentWarning2"] = ""
     
     ctx.ext_ptl["legacySound"] = False
     ctx.ext_ptl["showFPS"] = False
@@ -496,6 +498,10 @@ math.randomseed(playdate.getSecondsSinceEpoch())
         f.write("version=" + str(ctx.ext_pdxinfo["version"]) + str('\n'))
         f.write("imagePath=" + ctx.ext_pdxinfo["imagePath"] + "\n")
         f.write("launchSoundPath=" + ctx.ext_pdxinfo["launchSoundPath"] + "\n")
+        if len(ctx.ext_pdxinfo["contentWarning"]) > 0:
+            f.write("contentWarning=" + ctx.ext_pdxinfo["contentWarning"] + "\n")
+        if len(ctx.ext_pdxinfo["contentWarning2"]) > 0:
+            f.write("contentWarning2=" + ctx.ext_pdxinfo["contentWarning2"] + "\n")
     print(f"pdxinfo saved to {outpath}")
 
     # generates launcher card from Pulpscript JSON and tilesheet
