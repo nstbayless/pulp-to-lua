@@ -118,6 +118,7 @@ config = {
     followOverflowTile = 1,
     allowDismissRootMenu = 0,
     sayAdvanceDelay = 0.2,
+    textSpeed = 20,
     _pulp_to_lua = pulp.tiles[1],
 }
 
@@ -657,7 +658,10 @@ local function updateMessage(up, down, left, right, confirm, cancel)
     elseif message.textidx < #text and skiptext and message.sayAdvanceDelay <= 0 then
         message.textidx = #text
     elseif message.textidx < #text then
-        message.textidx += 1
+        message.textidx += (message.textSpeed or FPS) / FPS
+        if message.textidx >= #text then
+            message.textids = #text
+        end
     elseif skiptext and message.sayAdvanceDelay <= 0 then
         -- proceed to next page or close if last page.
         
@@ -706,7 +710,7 @@ local function drawMessage(message, submenu)
         
         if message.text and message.page and message.text[message.page] then
             pulp.__fn_window(message.x-1, message.y-1, message.w+2, message.h+2)
-            local text = substr(message.text[message.page], 1, message.textidx)
+            local text = substr(message.text[message.page], 1, floor(message.textidx))
             pulp.__fn_label(message.x, message.y, nil, nil, text)
             
             -- prompt to advance
@@ -1750,6 +1754,7 @@ function pulp.__fn_say(x,y,w,h, actor, event, evname, block,text)
         page = 1,
         prompt_timer = -1,
         sayAdvanceDelay = config.sayAdvanceDelay,
+        textSpeed = config.textSpeed,
         textidx = 0,
         clear = pulp.frame == 0,
         text = paginate(text or "", w * (pulp.halfwidth and 2 or 1), h),
@@ -1789,6 +1794,7 @@ function pulp.__fn_menu(x,y,w,h, actor, event, evname, block)
         firstopt = 1,
         optselect = 1,
         sayAdvanceDelay = config.sayAdvanceDelay,
+        textSpeed = config.textSpeed,
         actor = actor,
         event = event,
         evname = evname,
