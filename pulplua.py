@@ -87,7 +87,11 @@ math.randomseed(playdate.getSecondsSinceEpoch())
             + f"  PTLE_SMOOTH_MOVEMENT_SPEED = 0,\n" \
             + f"  PTLE_SMOOTH_OFFSET_X = 0,\n" \
             + f"  PTLE_SMOOTH_OFFSET_Y = 0,\n" \
-            + f"  PTLE_SHOW_FPS = false\n" \
+            + f"  PTLE_SHOW_FPS = false,\n" \
+            + f"  PTLE_CONFIRM_DAS = -1,\n" \
+            + f"  PTLE_CANCEL_DAS = -1,\n" \
+            + f"  PTLE_V_DAS = -1,\n" \
+            + f"  PTLE_H_DAS = -1\n" \
         + "}\n"
         code += "local __pulp <const> = ___pulp\n"
         code += "import \"pulp\"\n"

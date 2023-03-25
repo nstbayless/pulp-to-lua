@@ -70,6 +70,10 @@ When drawing, you can add the values `__PTLE_SMOOTH_OFFSET_X` and `__PTLE_SMOOTH
 
 Of course, when using regular (non-milled) pulp, these values will all default to 0, so no unexpected behaviour will occur by adding `__PTLE_SMOOTH_OFFSET_X` or `__PTLE_SMOOTH_OFFSET_Y`. Therefore, there is no need to check for the occurrence of transpilation from within the code.
 
+### DAS Detection
+
+When `config.inputRepeat = 1`, held inputs get repeated ("Delayed Auto-Shift"). In the `update`, `confirm`, and `cancel` events, `__PTLE_CONFIRM_DAS`, `__PTLE_CANCEL_DAS`, `__PTLE_V_DAS` (vertical d-pad), and `__PTLE_H_DAS` (horizontal d-pad) are set to 1 when the input is repeated, and -1 otherwise.
+
 ### Legacy Sound
 
 To use the sound engine for sfx from before the 1.10.0 update, place the following comment in any pulp code block. (Note that this does not affect music.)

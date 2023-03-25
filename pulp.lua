@@ -777,6 +777,10 @@ local function readInput()
         right = false
     end
     
+    pulp.PTLE_CONFIRM_DAS = -1
+    pulp.PTLE_CANCEL_DAS = -1
+    pulp.PTLE_V_DAS = -1
+    pulp.PTLE_H_DAS = -1
     local a_pressed = a and not prev_a
     local b_pressed = b and not prev_b
     local up_pressed = up and not prev_up
@@ -812,26 +816,32 @@ local function readInput()
         if a and a_press_time and now >= a_press_time  then
             a_press_time = next_repeat
             a_pressed = true
+            pulp.PTLE_CONFIRM_DAS = 1
         end
         if b and b_press_time and now >= b_press_time  then
             b_press_time = next_repeat
             b_pressed = true
+            pulp.PTLE_CANCEL_DAS = 1
         end
         if up and up_press_time and now >= up_press_time  then
             up_press_time = next_repeat
             up_pressed = true
+            pulp.PTLE_V_DAS = 1
         end
         if down and down_press_time and now >= down_press_time  then
             down_press_time = next_repeat
             down_pressed = true
+            pulp.PTLE_V_DAS = 1
         end
         if left and left_press_time and now >= left_press_time  then
             left_press_time = next_repeat
             left_pressed = true
+            pulp.PTLE_H_DAS = 1
         end
         if right and right_press_time and now >= right_press_time  then
             right_press_time = next_repeat
             right_pressed = true
+            pulp.PTLE_H_DAS = 1
         end
     else
         a_press_time = false

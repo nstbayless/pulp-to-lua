@@ -293,6 +293,14 @@ def remap_special_varname(varname, ctx):
         return "__pulp.PTLE_SMOOTH_OFFSET_X"
     elif varname == "__PTLE_SMOOTH_OFFSET_Y":
         return "__pulp.PTLE_SMOOTH_OFFSET_Y"
+    elif varname == "__PTLE_CONFIRM_DAS":
+        return "__pulp.PTLE_CONFIRM_DAS"
+    elif varname == "__PTLE_CANCEL_DAS":
+        return "__pulp.PTLE_CANCEL_DAS"
+    elif varname == "__PTLE_V_DAS":
+        return "__pulp.PTLE_V_DAS"
+    elif varname == "__PTLE_H_DAS":
+        return "__pulp.PTLE_H_DAS"
         
     return varname
 
