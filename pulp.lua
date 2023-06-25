@@ -1609,8 +1609,7 @@ function pulp.__fn_sound(sid)
     local sound = pulp:getSound(sid)
     if sound and sound.sequence then
         sound.sequence:stop()
-        sound.sequence:goToStep(1)
-        sound.sequence:play()
+        sound.sequence:goToStep(1, true)
     end
 end
 
