@@ -1711,7 +1711,6 @@ function pulp.__fn_restore(name)
 end
 
 function pulp.__fn_store(name)
-    assert(type(name) == "string")
     local value = pulp.getvariable(name)
     if type(value) ~= "table" then
         pulp.store[name] = value
