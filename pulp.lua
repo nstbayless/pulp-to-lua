@@ -1711,12 +1711,17 @@ function pulp.__fn_restore(name)
 end
 
 function pulp.__fn_store(name)
-    assert(type(name) == "string")
-    local value = pulp.getvariable(name)
-    if type(value) ~= "table" then
-        pulp.store[name] = value
+    if name then
+        assert(type(name) == "string")
+        local value = pulp.getvariable(name)
+        if type(value) ~= "table" then
+            pulp.store[name] = value
+        end
+        pulp.store_dirty = true
+    else
+        -- when called with no args, save persistent storage immediately
+        pulp:savestore()
     end
-    pulp.store_dirty = true
 end
 
 function pulp.__fn_toss(name)
