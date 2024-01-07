@@ -1,7 +1,7 @@
 import json
 import os
 import shutil
-from pulpscript import transpile_event, PulpScriptContext, istoken, tile_ids, escape_string
+from pulpscript import transpile_event, PulpScriptContext, istoken, tile_ids, escape_string, is_id
 
 if not os.path.exists("./pulplua.py"):
     print("Error: must be run in the pulp-to-lua repository directory.")
@@ -425,15 +425,15 @@ math.randomseed(playdate.getSecondsSinceEpoch())
 
     code += "\n"
     vars = sorted(list(ctx.vars))
-    vars.sort(key=lambda var: -ctx.var_usage[var])
+    vars.sort(key=lambda var: -ctx.var_usage.get(var, 0))
     varcode = ""
     LOCVARMAX = 160 # chosen rather arbitrarily. 200 is too high though; it won't compile.
     locvars = []
     i = 0
     for var in vars:
         assert not var.startswith("__"), "variables cannot start with __."
-        if istoken(var) and "." not in var:
-            if i < LOCVARMAX:
+        if "." not in var:
+            if i < LOCVARMAX and is_id(var):
                 # TODO: optimize local variables by usage
                 varcode += "local "
                 i += 1

@@ -2,7 +2,18 @@
 # It's more complicated than transpiling the assets, so it gets its own file
 # to keep it self-contained.
 
+import re
+
 RELASSIGN = True # allow relative assignment in lua, e.g. `x += 1`
+
+def is_id(varname):
+    return re.match(r'^[a-zA-Z_]\w*$', varname) is not None
+
+def sanitize_varname(varname):
+    if is_id(varname):
+        return varname
+    varname = varname.replace('"', '\\"')
+    return f"_G[\"{varname}\"]"
 
 class PulpScriptContext:
     def __init__(self):
@@ -62,14 +73,17 @@ class PulpScriptContext:
             #ignore pulp-to-lua extension variables
             return varname
         
-        self.vars.add(varname)
         self.var_usage[varname] = self.var_usage.get(varname, 0) + 1
         if varname.startswith("__"):
             # to prevent namespace conflicts, we append additional underscores if the variable name
             # starts with two underscores.
-            return "__" + varname
-        else:
-            return varname
+            varname = "__" + varname
+        
+        varname = sanitize_varname(varname)
+        
+        self.vars.add(varname)
+        return varname
+        
         
     # get-indent.
     def gi(self):
@@ -128,11 +142,13 @@ funclist = [
     "wait",
     "window",
     "crop",
-    "play"
+    "play",
 ]
 
+# functions which can be used in expressions
 exfuncs = [
     "type",
+    "id",
     "solid",
     "frame",
     "floor",
@@ -184,7 +200,8 @@ funcargs = {
     "crop": ["x", "y", "w", "h"],
     "play": ["actor", "event", "evname", "block"],
     "once": ["actor", "event", "evname", "block"],
-    "type": ["x", "y"]
+    "type": ["x", "y"],
+    "id": ["x", "y"],
 }
 
 staticfuncs = {
@@ -205,6 +222,7 @@ def escape_string(s):
         .replace("\f", "\\f") \
         .replace("\"", "\\\"")
 
+# note that '.' is valid in a token, but not an id
 def istoken(s):
     if type(s) != str:
         return False
@@ -301,7 +319,7 @@ def remap_special_varname(varname, ctx):
         return "__pulp.PTLE_V_DAS"
     elif varname == "__PTLE_H_DAS":
         return "__pulp.PTLE_H_DAS"
-        
+    
     return varname
 
 def ex_get(expression, ctx):

@@ -2090,6 +2090,21 @@ function pulp.__ex_type(x, y, id)
     return 0
 end
 
+function pulp.__ex_id(x, y, name)
+    if x or y then
+        if x >= 0 and x < TILESW and y >= 0 and y < TILESH then
+            return roomtiles[y][x].tile.id
+        end
+    else
+        local tile = pulp:getTile(name)
+        if tile then
+            return tile.id
+        end
+    end
+    
+    return 0
+end
+
 -- TODO: inline this
 function pulp.__ex_solid(x, y, id)
     if x and y then
